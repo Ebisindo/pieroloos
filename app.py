@@ -567,17 +567,17 @@ with st.sidebar:
     )
 
     with st.expander("System Status"):
-    if BACKGROUND_EXISTS:
-        st.success("Background loaded")
-    else:
-        st.warning("Background not found")
+        if BACKGROUND_EXISTS:
+            st.success("Background loaded")
+        else:
+            st.warning("Background not found")
 
-    if LOGO_EXISTS:
-        st.success(f"Logo loaded: {LOGO_PATH.name}")
-    else:
-        st.warning("Logo not found")
+        if LOGO_EXISTS:
+            st.success(f"Logo loaded: {LOGO_PATH.name}")
+        else:
+            st.warning("Logo not found")
 
-    st.success("Database ready")
+        st.success("Database ready")
 
     st.divider()
 
