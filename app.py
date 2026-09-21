@@ -90,11 +90,11 @@ def get_connection() -> sqlite3.Connection:
     return connection
 
 
-def initialize_database() -> None:
-    """Create the PieroloOS tables and migrate older database schemas."""
+DATABASE_SCHEMA_VERSION = 2
 
-    connection = get_connection()
-    cursor = connection.cursor()
+
+def _create_canonical_tables(cursor: sqlite3.Cursor) -> None:
+    """Create the current PieroloOS database schema."""
 
     cursor.execute(
         """
@@ -140,49 +140,265 @@ def initialize_database() -> None:
         """
     )
 
-    # Migrate databases created by earlier versions of the MVP.
-    expected_columns = {
-        "clients": {
-            "client_name": "TEXT",
-            "email": "TEXT",
-            "phone": "TEXT",
-            "country": "TEXT",
-            "business_name": "TEXT",
-            "business_type": "TEXT",
-            "service": "TEXT",
-            "status": "TEXT DEFAULT 'New'",
-            "notes": "TEXT",
-            "created_at": "TEXT",
-        },
-        "reports": {
-            "client_name": "TEXT",
-            "report_type": "TEXT",
-            "content": "TEXT",
-            "created_at": "TEXT",
-        },
-        "engagements": {
-            "client_name": "TEXT",
-            "service": "TEXT",
-            "status": "TEXT DEFAULT 'Open'",
-            "next_action": "TEXT",
-            "notes": "TEXT",
-            "updated_at": "TEXT",
-        },
-    }
 
-    for table, columns in expected_columns.items():
-        existing_columns = {
-            row[1]
-            for row in cursor.execute(
-                f"PRAGMA table_info({table})"
-            ).fetchall()
+def _table_columns(
+    cursor: sqlite3.Cursor,
+    table_name: str,
+) -> list[str]:
+    return [
+        row[1]
+        for row in cursor.execute(
+            f"PRAGMA table_info({table_name})"
+        ).fetchall()
+    ]
+
+
+def _rebuild_table(
+    cursor: sqlite3.Cursor,
+    table_name: str,
+    columns: list[str],
+) -> None:
+    """
+    Rebuild a table using the canonical schema while preserving
+    all data that can be mapped into the current schema.
+
+    This handles legacy tables that contain additional NOT NULL
+    columns which would otherwise make INSERT statements fail.
+    """
+
+    existing = _table_columns(cursor, table_name)
+
+    temporary_name = f"{table_name}__migration"
+
+    cursor.execute(
+        f"DROP TABLE IF EXISTS {temporary_name}"
+    )
+
+    if table_name == "clients":
+
+        cursor.execute(
+            f"""
+            CREATE TABLE {temporary_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_name TEXT NOT NULL,
+                email TEXT,
+                phone TEXT,
+                country TEXT,
+                business_name TEXT,
+                business_type TEXT,
+                service TEXT,
+                status TEXT DEFAULT 'New',
+                notes TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+
+    elif table_name == "reports":
+
+        cursor.execute(
+            f"""
+            CREATE TABLE {temporary_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_name TEXT,
+                report_type TEXT,
+                content TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+
+    elif table_name == "engagements":
+
+        cursor.execute(
+            f"""
+            CREATE TABLE {temporary_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_name TEXT,
+                service TEXT,
+                status TEXT DEFAULT 'Open',
+                next_action TEXT,
+                notes TEXT,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+
+    else:
+        return
+
+    available = [
+        column
+        for column in columns
+        if column in existing
+    ]
+
+    if available:
+        target_sql = ", ".join(available)
+        source_expressions = []
+
+        for column in available:
+            if column == "client_name":
+                source_expressions.append(
+                    "COALESCE(client_name, 'Migrated Client')"
+                )
+            elif column in {"created_at", "updated_at"}:
+                source_expressions.append(
+                    f"COALESCE({column}, datetime('now'))"
+                )
+            else:
+                source_expressions.append(column)
+
+        source_sql = ", ".join(source_expressions)
+
+        # Required fields that did not exist in the legacy table.
+        missing_required = []
+
+        if "client_name" in columns and "client_name" not in existing:
+            missing_required.append("client_name")
+
+        if "created_at" in columns and "created_at" not in existing:
+            missing_required.append("created_at")
+
+        if "updated_at" in columns and "updated_at" not in existing:
+            missing_required.append("updated_at")
+
+        if missing_required:
+            target_sql = ", ".join(
+                available + missing_required
+            )
+
+            for column in missing_required:
+                if column == "client_name":
+                    source_expressions.append(
+                        "'Migrated Client'"
+                    )
+                else:
+                    source_expressions.append(
+                        "datetime('now')"
+                    )
+
+            source_sql = ", ".join(source_expressions)
+
+        cursor.execute(
+            f"""
+            INSERT INTO {temporary_name}
+            ({target_sql})
+            SELECT {source_sql}
+            FROM {table_name}
+            """
+        )
+
+    cursor.execute(
+        f"DROP TABLE {table_name}"
+    )
+
+    cursor.execute(
+        f"ALTER TABLE {temporary_name} RENAME TO {table_name}"
+    )
+
+
+def initialize_database() -> None:
+    """
+    Initialise and migrate the PieroloOS SQLite database.
+
+    Version 2 uses canonical table schemas. Legacy tables are rebuilt
+    when necessary so old required columns cannot break new INSERTs.
+    Existing data in matching columns is preserved.
+    """
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pieroloos_schema (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            version INTEGER NOT NULL
+        )
+        """
+    )
+
+    schema_row = cursor.execute(
+        """
+        SELECT version
+        FROM pieroloos_schema
+        WHERE id = 1
+        """
+    ).fetchone()
+
+    current_version = (
+        int(schema_row[0])
+        if schema_row is not None
+        else 0
+    )
+
+    if current_version < DATABASE_SCHEMA_VERSION:
+
+        # Create missing tables first so the migration logic can
+        # inspect them safely.
+        _create_canonical_tables(cursor)
+
+        canonical_columns = {
+            "clients": [
+                "id",
+                "client_name",
+                "email",
+                "phone",
+                "country",
+                "business_name",
+                "business_type",
+                "service",
+                "status",
+                "notes",
+                "created_at",
+            ],
+            "reports": [
+                "id",
+                "client_name",
+                "report_type",
+                "content",
+                "created_at",
+            ],
+            "engagements": [
+                "id",
+                "client_name",
+                "service",
+                "status",
+                "next_action",
+                "notes",
+                "updated_at",
+            ],
         }
 
-        for column, definition in columns.items():
-            if column not in existing_columns:
-                cursor.execute(
-                    f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+        for table_name, columns in canonical_columns.items():
+
+            existing_columns = _table_columns(
+                cursor,
+                table_name,
+            )
+
+            if existing_columns != columns:
+                _rebuild_table(
+                    cursor,
+                    table_name,
+                    columns,
                 )
+
+        cursor.execute(
+            """
+            INSERT INTO pieroloos_schema (id, version)
+            VALUES (1, ?)
+            ON CONFLICT(id)
+            DO UPDATE SET version = excluded.version
+            """,
+            (DATABASE_SCHEMA_VERSION,),
+        )
+
+    else:
+        # Safety check in case a table was removed or damaged after
+        # the migration was recorded.
+        _create_canonical_tables(cursor)
 
     connection.commit()
     connection.close()
