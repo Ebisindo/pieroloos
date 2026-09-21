@@ -1,6 +1,5 @@
 from pathlib import Path
 import base64
-import html
 import sqlite3
 from datetime import datetime
 from typing import Optional
@@ -23,7 +22,7 @@ st.set_page_config(
 
 
 # ============================================================
-# 1. PROJECT PATHS
+# 1. PATH CONFIGURATION
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -34,7 +33,7 @@ DB_PATH = BASE_DIR / "pieroloos.db"
 
 BACKGROUND_PATH = ASSET_DIR / "pieroloos_background.svg"
 
-# Supports both possible logo spellings.
+# Support either spelling while the repository is being standardised.
 LOGO_CANDIDATES = [
     ASSET_DIR / "pierolocorp_logo.png",
     ASSET_DIR / "pierolooscorp_logo.png",
@@ -45,38 +44,35 @@ LOGO_PATH = next(
     None,
 )
 
-REPORT_DIR.mkdir(parents=True, exist_ok=True)
+REPORT_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
+)
 
 
 # ============================================================
-# 2. ASSET FUNCTIONS
+# 2. ASSET LOADING
 # ============================================================
 
 @st.cache_data(show_spinner=False)
-def get_background_uri() -> str:
-    """Convert the SVG background into a browser-safe data URI."""
+def load_background() -> str:
+    """
+    Convert the supplied SVG background into a base64 data URI.
+    """
     if not BACKGROUND_PATH.exists():
         return ""
 
     encoded = base64.b64encode(
         BACKGROUND_PATH.read_bytes()
-    ).decode("ascii")
+    ).decode("utf-8")
 
     return f"data:image/svg+xml;base64,{encoded}"
 
 
-BACKGROUND_URI = get_background_uri()
+BACKGROUND_URI = load_background()
 
-
-def asset_status() -> tuple[bool, bool]:
-    """Return background and logo availability."""
-    background_exists = BACKGROUND_PATH.exists()
-    logo_exists = LOGO_PATH is not None
-
-    return background_exists, logo_exists
-
-
-background_ok, logo_ok = asset_status()
+BACKGROUND_EXISTS = BACKGROUND_PATH.exists()
+LOGO_EXISTS = LOGO_PATH is not None
 
 
 # ============================================================
@@ -84,9 +80,8 @@ background_ok, logo_ok = asset_status()
 # ============================================================
 
 def get_connection() -> sqlite3.Connection:
-    """Open the local PieroloOS SQLite database."""
     connection = sqlite3.connect(
-        DB_PATH,
+        str(DB_PATH),
         check_same_thread=False,
     )
 
@@ -95,8 +90,8 @@ def get_connection() -> sqlite3.Connection:
     return connection
 
 
-def init_database() -> None:
-    """Create required database tables."""
+def initialize_database() -> None:
+
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -148,17 +143,18 @@ def init_database() -> None:
     connection.close()
 
 
-init_database()
+initialize_database()
 
 
 # ============================================================
-# 4. DATABASE HELPERS
+# 4. DATABASE FUNCTIONS
 # ============================================================
 
 def execute_write(
     query: str,
     params: tuple = (),
 ) -> None:
+
     connection = get_connection()
 
     connection.execute(
@@ -174,6 +170,7 @@ def fetch_all(
     query: str,
     params: tuple = (),
 ) -> list[sqlite3.Row]:
+
     connection = get_connection()
 
     rows = connection.execute(
@@ -190,6 +187,7 @@ def fetch_one(
     query: str,
     params: tuple = (),
 ) -> Optional[sqlite3.Row]:
+
     connection = get_connection()
 
     row = connection.execute(
@@ -202,21 +200,54 @@ def fetch_one(
     return row
 
 
-def count_records(table: str) -> int:
-    allowed_tables = {
+def count_records(
+    table: str,
+) -> int:
+
+    allowed = {
         "clients",
         "reports",
         "engagements",
     }
 
-    if table not in allowed_tables:
+    if table not in allowed:
         return 0
 
     row = fetch_one(
         f"SELECT COUNT(*) AS total FROM {table}"
     )
 
-    return int(row["total"]) if row else 0
+    if row is None:
+        return 0
+
+    return int(row["total"])
+
+
+def current_timestamp() -> str:
+
+    return datetime.now().strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+
+def safe_filename(value: str) -> str:
+
+    result = ""
+
+    for character in value:
+
+        if (
+            character.isalnum()
+            or character in "-_"
+        ):
+            result += character
+
+        else:
+            result += "_"
+
+    result = result.strip("_")
+
+    return result or "report"
 
 
 # ============================================================
@@ -296,435 +327,170 @@ JURISDICTIONS = [
 
 
 # ============================================================
-# 6. GLOBAL CSS
+# 6. VISUAL DESIGN
 # ============================================================
 
-def inject_css() -> None:
+def inject_styles() -> None:
 
     if BACKGROUND_URI:
 
-        background_rule = f"""
-            background-image:
-                linear-gradient(
-                    rgba(5, 5, 18, 0.72),
-                    rgba(5, 5, 18, 0.88)
-                ),
-                url("{BACKGROUND_URI}");
+        background_css = f"""
+        background-image:
+            linear-gradient(
+                rgba(5, 5, 18, 0.78),
+                rgba(5, 5, 18, 0.90)
+            ),
+            url("{BACKGROUND_URI}");
         """
 
     else:
 
-        background_rule = """
-            background:
-                radial-gradient(
-                    circle at 70% 15%,
-                    rgba(113, 60, 180, 0.30),
-                    transparent 30%
-                ),
-                linear-gradient(
-                    135deg,
-                    #050512 0%,
-                    #100a25 50%,
-                    #050512 100%
-                );
+        background_css = """
+        background:
+            radial-gradient(
+                circle at 80% 10%,
+                rgba(155, 108, 255, 0.20),
+                transparent 30%
+            ),
+            linear-gradient(
+                135deg,
+                #050512,
+                #110a28,
+                #050512
+            );
         """
-
-    hero_background = (
-        f'url("{BACKGROUND_URI}")'
-        if BACKGROUND_URI
-        else "none"
-    )
 
     st.markdown(
         f"""
         <style>
 
-        @import url(
-            'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap'
-        );
-
         :root {{
-            --navy: #050512;
-            --panel: rgba(12, 10, 31, 0.78);
-            --panel-strong: rgba(17, 12, 40, 0.92);
             --gold: #d7b45a;
             --gold-light: #f1d98a;
             --violet: #9b6cff;
             --violet-light: #c5a7ff;
+            --navy: #050512;
+            --panel: rgba(12, 10, 31, 0.82);
+            --border: rgba(215, 180, 90, 0.20);
             --text: #f6f3ff;
             --muted: #aaa3c2;
-            --border: rgba(215, 180, 90, 0.20);
-        }}
-
-        html,
-        body,
-        [class*="css"] {{
-            font-family: 'Inter', sans-serif;
         }}
 
         .stApp {{
-            color: var(--text);
-            {background_rule}
-            background-attachment: fixed;
+            {background_css}
+
             background-size: cover;
             background-position: center;
-        }}
+            background-attachment: fixed;
 
-        .stApp::before {{
-            content: "";
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-
-            background:
-                radial-gradient(
-                    circle at 80% 10%,
-                    rgba(155,108,255,0.10),
-                    transparent 28%
-                ),
-                radial-gradient(
-                    circle at 15% 85%,
-                    rgba(215,180,90,0.06),
-                    transparent 24%
-                );
-
-            z-index: 0;
-        }}
-
-        .block-container {{
-            position: relative;
-            z-index: 1;
-            max-width: 1500px;
-            padding-top: 1.25rem;
-            padding-bottom: 3rem;
+            color: var(--text);
         }}
 
         [data-testid="stSidebar"] {{
-            background: rgba(5, 5, 18, 0.96);
-            border-right: 1px solid var(--border);
+            background:
+                rgba(5, 5, 18, 0.97);
+
+            border-right:
+                1px solid
+                rgba(215, 180, 90, 0.20);
         }}
 
-        [data-testid="stSidebar"] > div:first-child {{
-            padding-top: 1rem;
-        }}
-
-        [data-testid="stSidebar"] .stRadio label {{
-            color: #ddd6f7 !important;
-            font-weight: 600;
-        }}
-
-        [data-testid="stSidebar"]
-        .stRadio
-        div[role="radiogroup"] {{
-            gap: 0.25rem;
-        }}
-
-        h1,
-        h2,
-        h3,
-        h4 {{
-            font-family: 'Space Grotesk', sans-serif;
-            letter-spacing: -0.02em;
+        .block-container {{
+            max-width: 1500px;
+            padding-top: 1.5rem;
+            padding-bottom: 4rem;
         }}
 
         h1 {{
             color: var(--gold-light);
         }}
 
-        h2,
+        h2 {{
+            color: #f6f0ff;
+        }}
+
         h3 {{
-            color: #f4edff;
+            color: #f1eaff;
         }}
 
-        p,
-        li {{
-            color: #d2cce3;
+        p {{
+            color: #d0c9df;
         }}
 
-        .hero {{
-            position: relative;
-            overflow: hidden;
+        .stCaption {{
+            color: #9991ac;
+        }}
 
-            border: 1px solid var(--border);
-            border-radius: 24px;
-
-            padding: 2.25rem;
-            min-height: 290px;
-
-            margin-bottom: 1.25rem;
-
+        div[data-testid="stMetric"] {{
             background:
-                linear-gradient(
-                    135deg,
-                    rgba(7,6,21,.90),
-                    rgba(27,13,55,.70)
-                ),
-                {hero_background};
-
-            background-size: cover;
-            background-position: center;
-
-            box-shadow:
-                0 20px 70px rgba(0,0,0,.35);
-        }}
-
-        .hero::after {{
-            content: "";
-
-            position: absolute;
-
-            width: 280px;
-            height: 280px;
-
-            right: -90px;
-            top: -90px;
+                rgba(12, 10, 31, 0.78);
 
             border:
                 1px solid
-                rgba(215,180,90,.28);
-
-            border-radius: 50%;
-
-            box-shadow:
-                0 0 70px
-                rgba(155,108,255,.18);
-        }}
-
-        .eyebrow {{
-            color: var(--gold);
-
-            text-transform: uppercase;
-
-            letter-spacing: .18em;
-
-            font-size: .74rem;
-
-            font-weight: 800;
-
-            margin-bottom: .6rem;
-        }}
-
-        .hero-title {{
-            font-family: 'Space Grotesk', sans-serif;
-
-            font-size:
-                clamp(2rem, 5vw, 4.4rem);
-
-            line-height: .98;
-
-            font-weight: 800;
-
-            color: #fff;
-
-            max-width: 820px;
-
-            margin-bottom: 1rem;
-        }}
-
-        .hero-title span {{
-            color: var(--gold-light);
-        }}
-
-        .hero-copy {{
-            max-width: 760px;
-
-            color: #c5bddb;
-
-            font-size: 1.02rem;
-
-            line-height: 1.65;
-        }}
-
-        .metric-card {{
-            background: var(--panel);
-
-            border:
-                1px solid
-                rgba(215,180,90,.16);
+                rgba(215, 180, 90, 0.18);
 
             border-radius: 18px;
 
-            padding: 1.1rem 1.2rem;
-
-            min-height: 112px;
+            padding: 1rem;
 
             box-shadow:
                 0 12px 35px
-                rgba(0,0,0,.20);
+                rgba(0, 0, 0, 0.20);
         }}
 
-        .metric-label {{
-            color: var(--muted);
-
-            font-size: .78rem;
-
-            text-transform: uppercase;
-
-            letter-spacing: .08em;
-
-            font-weight: 700;
+        div[data-testid="stMetricLabel"] {{
+            color: #aaa3c2;
         }}
 
-        .metric-value {{
-            color: var(--gold-light);
-
-            font-family: 'Space Grotesk', sans-serif;
-
-            font-size: 2rem;
-
-            font-weight: 800;
-
-            margin-top: .35rem;
-        }}
-
-        .section-card {{
-            background: var(--panel);
-
-            border:
-                1px solid
-                rgba(155,108,255,.17);
-
-            border-radius: 20px;
-
-            padding: 1.25rem;
-
-            margin-bottom: 1rem;
-
-            box-shadow:
-                0 12px 40px
-                rgba(0,0,0,.18);
-        }}
-
-        .quick-card {{
-            background:
-                linear-gradient(
-                    145deg,
-                    rgba(16,12,36,.92),
-                    rgba(28,17,57,.76)
-                );
-
-            border:
-                1px solid
-                rgba(215,180,90,.16);
-
-            border-radius: 18px;
-
-            padding: 1.25rem;
-
-            min-height: 150px;
-        }}
-
-        .quick-icon {{
-            color: var(--gold);
-
-            font-size: 1.6rem;
-        }}
-
-        .quick-title {{
-            color: #fff;
-
-            font-weight: 800;
-
-            font-size: 1.05rem;
-
-            margin: .45rem 0;
-        }}
-
-        .quick-copy {{
-            color: var(--muted);
-
-            font-size: .88rem;
-
-            line-height: 1.5;
-        }}
-
-        .status-pill {{
-            display: inline-block;
-
-            padding: .28rem .65rem;
-
-            border-radius: 999px;
-
-            background:
-                rgba(155,108,255,.13);
-
-            border:
-                1px solid
-                rgba(155,108,255,.25);
-
-            color: var(--violet-light);
-
-            font-size: .74rem;
-
-            font-weight: 800;
-        }}
-
-        .footer {{
-            margin-top: 3rem;
-
-            padding:
-                1.5rem 0 .5rem;
-
-            border-top:
-                1px solid
-                rgba(215,180,90,.12);
-
-            color: #817a99;
-
-            font-size: .78rem;
-
-            text-align: center;
-        }}
-
-        .small-note {{
-            color: #928ba8;
-
-            font-size: .78rem;
-
-            line-height: 1.5;
+        div[data-testid="stMetricValue"] {{
+            color: #f1d98a;
         }}
 
         div[data-testid="stButton"] > button {{
             border:
                 1px solid
-                rgba(215,180,90,.24);
+                rgba(215, 180, 90, 0.25);
 
             border-radius: 12px;
 
             background:
-                rgba(18,13,40,.82);
+                rgba(15, 11, 35, 0.90);
 
-            color: #f2eaff;
+            color: #f4edff;
 
             font-weight: 700;
         }}
 
         div[data-testid="stButton"] > button:hover {{
             border-color:
-                rgba(215,180,90,.65);
+                rgba(215, 180, 90, 0.70);
 
-            color: var(--gold-light);
+            color:
+                #f1d98a;
         }}
 
         div[data-testid="stFormSubmitButton"] > button {{
             border-radius: 12px;
-
             font-weight: 800;
         }}
 
-        [data-testid="stDataFrame"] {{
+        [data-testid="stExpander"] {{
+            background:
+                rgba(12, 10, 31, 0.72);
+
             border:
                 1px solid
-                rgba(215,180,90,.12);
+                rgba(155, 108, 255, 0.18);
 
+            border-radius: 15px;
+        }}
+
+        [data-testid="stDataFrame"] {{
             border-radius: 14px;
         }}
 
-        .stTextInput input,
-        .stTextArea textarea,
-        .stSelectbox div[data-baseweb="select"],
-        .stNumberInput input {{
-            border-radius: 10px;
+        .hero-spacer {{
+            height: 10px;
         }}
 
         @media (max-width: 768px) {{
@@ -734,17 +500,6 @@ def inject_css() -> None:
                 padding-right: 1rem;
             }}
 
-            .hero {{
-                padding: 1.4rem;
-
-                min-height: 250px;
-
-                border-radius: 18px;
-            }}
-
-            .hero-title {{
-                font-size: 2.2rem;
-            }}
         }}
 
         </style>
@@ -753,117 +508,17 @@ def inject_css() -> None:
     )
 
 
-inject_css()
+inject_styles()
 
 
 # ============================================================
-# 7. UI HELPERS
-# ============================================================
-
-def page_header(
-    title: str,
-    subtitle: str = "",
-) -> None:
-
-    st.markdown(
-        f"## {html.escape(title)}"
-    )
-
-    if subtitle:
-
-        st.markdown(
-            f"""
-            <p class="small-note">
-                {html.escape(subtitle)}
-            </p>
-            """,
-            unsafe_allow_html=True,
-        )
-
-
-def metric_card(
-    label: str,
-    value: str | int,
-) -> None:
-
-    st.markdown(
-        f"""
-        <div class="metric-card">
-
-            <div class="metric-label">
-                {html.escape(label)}
-            </div>
-
-            <div class="metric-value">
-                {html.escape(str(value))}
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def section_start(
-    title: str,
-    description: str = "",
-) -> None:
-
-    st.markdown(
-        '<div class="section-card">',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        f"### {html.escape(title)}"
-    )
-
-    if description:
-
-        st.markdown(
-            f"""
-            <div class="small-note">
-                {html.escape(description)}
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-
-def section_end() -> None:
-
-    st.markdown(
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-
-def now_text() -> str:
-    return datetime.now().strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
-
-
-def safe_filename(value: str) -> str:
-
-    cleaned = "".join(
-        character
-        if character.isalnum()
-        or character in "-_"
-        else "_"
-        for character in value
-    )
-
-    return cleaned.strip("_") or "report"
-
-
-# ============================================================
-# 8. SIDEBAR / NAVIGATION
+# 7. SIDEBAR
 # ============================================================
 
 with st.sidebar:
 
-    if logo_ok:
+    # Official logo
+    if LOGO_EXISTS:
 
         st.image(
             str(LOGO_PATH),
@@ -872,42 +527,23 @@ with st.sidebar:
 
     else:
 
-        st.markdown(
-            """
-            <div style="padding:10px 0 18px;">
-
-                <div style="
-                    color:#d7b45a;
-                    font-size:1.35rem;
-                    font-weight:800;
-                ">
-                    PIEROLOOS
-                </div>
-
-                <div style="
-                    color:#8f86a7;
-                    font-size:.72rem;
-                ">
-                    PIEROLOCORP INTERNATIONAL LLC
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.title(
+            "PIEROLOOS"
         )
 
-    st.markdown(
-        """
-        <div class="status-pill">
-            PROFESSIONAL SERVICE OS · v0.1
-        </div>
-        """,
-        unsafe_allow_html=True,
+        st.caption(
+            "PIEROLOCORP INTERNATIONAL LLC"
+        )
+
+    st.divider()
+
+    st.caption(
+        "PROFESSIONAL SERVICE OS · v0.1"
     )
 
-    st.markdown("---")
+    st.divider()
 
-    nav_options = [
+    navigation = [
         "Command Center",
         "Client Intake",
         "Business Profile",
@@ -920,279 +556,392 @@ with st.sidebar:
 
     page = st.radio(
         "Navigation",
-        nav_options,
+        navigation,
         label_visibility="collapsed",
     )
 
-    st.markdown("---")
+    st.divider()
 
-    st.markdown(
-        """
-        <div class="small-note">
-
-        <b>Operating principle</b><br>
-
-        Prepare → Analyse → Decide → Execute
-        → Record → Improve
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.caption(
+        "Prepare → Analyse → Decide → Execute → Record → Improve"
     )
 
-    with st.expander("System Status"):
+    with st.expander(
+        "System Status"
+    ):
 
-        st.write(
-            f"Background: "
-            f"{'✓ Found' if background_ok else '✗ Missing'}"
-        )
-
-        st.write(
-            f"Logo: "
-            f"{'✓ Found' if logo_ok else '✗ Missing'}"
-        )
-
-        st.write(
-            "Database: ✓ Ready"
-        )
-
-        if LOGO_PATH:
-
-            st.caption(
-                f"Logo file: {LOGO_PATH.name}"
+        if BACKGROUND_EXISTS:
+            st.success(
+                "Background loaded",
+                icon="✓",
             )
+        else:
+            st.warning(
+                "Background not found",
+                icon="!",
+            )
+
+        if LOGO_EXISTS:
+            st.success(
+                f"Logo loaded: {LOGO_PATH.name}",
+                icon="✓",
+            )
+        else:
+            st.warning(
+                "Logo not found",
+                icon="!",
+            )
+
+        st.success(
+            "Database ready",
+            icon="✓",
+        )
+
+    st.divider()
 
     st.caption(
         "Decision-support prototype. "
-        "Not legal, tax, accounting, or financial advice."
+        "Not legal, tax, accounting, financial, "
+        "or other licensed professional advice."
     )
 
 
 # ============================================================
-# 9. COMMAND CENTER
+# 8. COMMAND CENTER
 # ============================================================
 
 if page == "Command Center":
 
-    st.markdown(
-        """
-        <div class="hero">
+    # --------------------------------------------------------
+    # HERO
+    # --------------------------------------------------------
 
-            <div class="eyebrow">
-                PieroloCorp International LLC
-            </div>
-
-            <div class="hero-title">
-                The operating system for a
-                <span>structured business.</span>
-            </div>
-
-            <div class="hero-copy">
-
-                PieroloOS brings client intake,
-                business intelligence, jurisdiction analysis,
-                formation planning, compliance tracking,
-                reporting, and engagement management
-                into one founder-operated workspace.
-
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.title(
+        "PieroloOS"
     )
 
-    cols = st.columns(4)
+    st.subheader(
+        "Professional Service Operating System"
+    )
 
-    with cols[0]:
-        metric_card(
+    st.write(
+        "A structured operating environment for "
+        "PieroloCorp International LLC — combining "
+        "client intake, business intelligence, "
+        "jurisdiction analysis, formation planning, "
+        "compliance tracking, reporting, and "
+        "engagement management."
+    )
+
+    st.divider()
+
+    # --------------------------------------------------------
+    # CORE METRICS
+    # --------------------------------------------------------
+
+    st.subheader(
+        "Command Center"
+    )
+
+    metric1, metric2, metric3, metric4 = st.columns(4)
+
+    with metric1:
+
+        st.metric(
             "Clients",
             count_records("clients"),
         )
 
-    with cols[1]:
-        metric_card(
+    with metric2:
+
+        st.metric(
             "Reports",
             count_records("reports"),
         )
 
-    with cols[2]:
-        metric_card(
+    with metric3:
+
+        st.metric(
             "Engagements",
             count_records("engagements"),
         )
 
-    with cols[3]:
-        metric_card(
+    with metric4:
+
+        st.metric(
             "Jurisdictions",
             len(JURISDICTIONS),
         )
 
-    st.markdown("### Quick Access")
+    st.divider()
 
-    qcols = st.columns(4)
+    # --------------------------------------------------------
+    # QUICK ACCESS
+    # --------------------------------------------------------
 
-    quick_items = [
-        (
-            "01",
-            "Client Intake",
-            "Capture and structure a new client engagement.",
-        ),
-        (
-            "02",
-            "Jurisdiction Lens",
-            "Compare jurisdictions against business criteria.",
-        ),
-        (
-            "03",
-            "Formation Roadmap",
-            "Turn a business objective into an execution sequence.",
-        ),
-        (
-            "04",
-            "Report Generator",
-            "Convert structured information into a client-ready report.",
-        ),
-    ]
-
-    for column, item in zip(
-        qcols,
-        quick_items,
-    ):
-
-        number, title, copy = item
-
-        with column:
-
-            st.markdown(
-                f"""
-                <div class="quick-card">
-
-                    <div class="quick-icon">
-                        {number}
-                    </div>
-
-                    <div class="quick-title">
-                        {title}
-                    </div>
-
-                    <div class="quick-copy">
-                        {copy}
-                    </div>
-
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    st.markdown("### Operating Model")
-
-    section_start(
-        "PieroloOS Workflow",
-        "The MVP is structured around a repeatable professional-service operating loop.",
+    st.subheader(
+        "Quick Access"
     )
 
-    workflow = [
-        (
-            "01",
-            "Intake",
-            "Capture the client's objective and facts.",
-        ),
-        (
-            "02",
-            "Classify",
-            "Structure the business and service requirement.",
-        ),
-        (
-            "03",
-            "Assess",
-            "Compare jurisdictions, risks, and requirements.",
-        ),
-        (
-            "04",
-            "Plan",
-            "Generate a practical formation and compliance roadmap.",
-        ),
-        (
-            "05",
-            "Approve",
-            "Identify decisions requiring client or professional approval.",
-        ),
-        (
-            "06",
-            "Execute",
-            "Coordinate the selected actions.",
-        ),
-        (
-            "07",
-            "Record",
-            "Preserve reports, status, and engagement history.",
-        ),
-        (
-            "08",
-            "Improve",
-            "Convert recurring work into reusable systems.",
-        ),
-    ]
+    quick1, quick2 = st.columns(2)
 
-    workflow_columns = st.columns(4)
+    with quick1:
 
-    for index, item in enumerate(workflow):
-
-        number, title, description = item
-
-        with workflow_columns[index % 4]:
+        with st.container(border=True):
 
             st.markdown(
-                f"""
-                <div style="padding:.8rem 0 1rem;">
-
-                    <div style="
-                        color:#d7b45a;
-                        font-weight:800;
-                    ">
-                        {number}
-                    </div>
-
-                    <div style="
-                        color:#fff;
-                        font-weight:800;
-                        margin:.2rem 0;
-                    ">
-                        {title}
-                    </div>
-
-                    <div class="small-note">
-                        {description}
-                    </div>
-
-                </div>
-                """,
-                unsafe_allow_html=True,
+                "### Client Intake"
             )
 
-    section_end()
+            st.write(
+                "Capture a new client, business objective, "
+                "service requirement, and engagement status."
+            )
+
+            if st.button(
+                "Open Client Intake",
+                key="home_client_intake",
+                use_container_width=True,
+            ):
+
+                st.session_state[
+                    "navigation_override"
+                ] = "Client Intake"
+
+                st.info(
+                    "Select Client Intake from the sidebar."
+                )
+
+    with quick2:
+
+        with st.container(border=True):
+
+            st.markdown(
+                "### Jurisdiction Lens"
+            )
+
+            st.write(
+                "Compare selected jurisdictions using "
+                "structured business criteria."
+            )
+
+            if st.button(
+                "Open Jurisdiction Lens",
+                key="home_jurisdiction",
+                use_container_width=True,
+            ):
+
+                st.info(
+                    "Select Jurisdiction Lens from the sidebar."
+                )
+
+    quick3, quick4 = st.columns(2)
+
+    with quick3:
+
+        with st.container(border=True):
+
+            st.markdown(
+                "### Formation Roadmap"
+            )
+
+            st.write(
+                "Turn a business objective into an "
+                "ordered formation and operating sequence."
+            )
+
+            if st.button(
+                "Open Formation Roadmap",
+                key="home_formation",
+                use_container_width=True,
+            ):
+
+                st.info(
+                    "Select Formation Roadmap from the sidebar."
+                )
+
+    with quick4:
+
+        with st.container(border=True):
+
+            st.markdown(
+                "### Report Generator"
+            )
+
+            st.write(
+                "Generate structured reports from "
+                "stored client information."
+            )
+
+            if st.button(
+                "Open Report Generator",
+                key="home_report",
+                use_container_width=True,
+            ):
+
+                st.info(
+                    "Select Report Generator from the sidebar."
+                )
+
+    st.divider()
+
+    # --------------------------------------------------------
+    # OPERATING MODEL
+    # --------------------------------------------------------
+
+    st.subheader(
+        "PieroloOS Operating Model"
+    )
+
+    st.write(
+        "The MVP follows a repeatable professional-service workflow."
+    )
+
+    workflow1, workflow2, workflow3, workflow4 = st.columns(4)
+
+    with workflow1:
+
+        st.markdown("**01 — Intake**")
+
+        st.caption(
+            "Capture objectives, facts, requirements, and constraints."
+        )
+
+    with workflow2:
+
+        st.markdown("**02 — Assess**")
+
+        st.caption(
+            "Structure information and evaluate available options."
+        )
+
+    with workflow3:
+
+        st.markdown("**03 — Plan**")
+
+        st.caption(
+            "Generate formation, compliance, and execution workflows."
+        )
+
+    with workflow4:
+
+        st.markdown("**04 — Record**")
+
+        st.caption(
+            "Preserve reports, decisions, status, and engagement history."
+        )
+
+    st.divider()
+
+    workflow5, workflow6, workflow7, workflow8 = st.columns(4)
+
+    with workflow5:
+
+        st.markdown("**05 — Approve**")
+
+        st.caption(
+            "Identify decisions requiring founder or professional approval."
+        )
+
+    with workflow6:
+
+        st.markdown("**06 — Execute**")
+
+        st.caption(
+            "Coordinate the selected business actions."
+        )
+
+    with workflow7:
+
+        st.markdown("**07 — Monitor**")
+
+        st.caption(
+            "Track corporate, financial, commercial, and compliance state."
+        )
+
+    with workflow8:
+
+        st.markdown("**08 — Improve**")
+
+        st.caption(
+            "Convert recurring service work into reusable systems."
+        )
+
+    st.divider()
+
+    # --------------------------------------------------------
+    # CURRENT SYSTEM STATE
+    # --------------------------------------------------------
+
+    st.subheader(
+        "Current System State"
+    )
+
+    state1, state2 = st.columns(2)
+
+    with state1:
+
+        st.write(
+            f"**Client records:** {count_records('clients')}"
+        )
+
+        st.write(
+            f"**Saved reports:** {count_records('reports')}"
+        )
+
+        st.write(
+            f"**Engagement records:** {count_records('engagements')}"
+        )
+
+    with state2:
+
+        if BACKGROUND_EXISTS:
+            st.write(
+                "✓ Custom PieroloOS background loaded"
+            )
+        else:
+            st.write(
+                "⚠ Custom background not found"
+            )
+
+        if LOGO_EXISTS:
+            st.write(
+                "✓ PieroloCorp official logo loaded"
+            )
+        else:
+            st.write(
+                "⚠ PieroloCorp logo not found"
+            )
+
+        st.write(
+            "✓ Local SQLite operating database ready"
+        )
 
 
 # ============================================================
-# 10. CLIENT INTAKE
+# 9. CLIENT INTAKE
 # ============================================================
 
 elif page == "Client Intake":
 
-    page_header(
-        "Client Intake",
-        "Create a structured client record that can feed the remaining PieroloOS modules.",
+    st.title(
+        "Client Intake"
     )
+
+    st.caption(
+        "Create a structured client record for the PieroloOS workflow."
+    )
+
+    st.divider()
 
     with st.form(
         "client_intake_form",
         clear_on_submit=False,
     ):
 
-        column1, column2 = st.columns(2)
+        left, right = st.columns(2)
 
-        with column1:
+        with left:
 
             client_name = st.text_input(
                 "Client / Founder Name *"
@@ -1214,7 +963,7 @@ elif page == "Client Intake":
                 "Proposed Business Name"
             )
 
-        with column2:
+        with right:
 
             business_type = st.selectbox(
                 "Business Type",
@@ -1256,11 +1005,11 @@ elif page == "Client Intake":
 
         notes = st.text_area(
             "Client Objective / Notes",
+            height=160,
             placeholder=(
                 "Describe the business objective, target market, "
                 "constraints, and immediate requirement."
             ),
-            height=160,
         )
 
         submitted = st.form_submit_button(
@@ -1306,7 +1055,7 @@ elif page == "Client Intake":
                     service,
                     status,
                     notes.strip(),
-                    now_text(),
+                    current_timestamp(),
                 ),
             )
 
@@ -1316,9 +1065,13 @@ elif page == "Client Intake":
 
             st.rerun()
 
-    st.markdown("### Recent Clients")
+    st.divider()
 
-    rows = fetch_all(
+    st.subheader(
+        "Recent Clients"
+    )
+
+    clients = fetch_all(
         """
         SELECT
             id,
@@ -1333,10 +1086,10 @@ elif page == "Client Intake":
         """
     )
 
-    if rows:
+    if clients:
 
         st.dataframe(
-            [dict(row) for row in rows],
+            [dict(row) for row in clients],
             use_container_width=True,
             hide_index=True,
         )
@@ -1349,15 +1102,20 @@ elif page == "Client Intake":
 
 
 # ============================================================
-# 11. BUSINESS PROFILE
+# 10. BUSINESS PROFILE
 # ============================================================
 
 elif page == "Business Profile":
 
-    page_header(
-        "Business Profile",
-        "Create a structured profile from the client's commercial, operational, and strategic context.",
+    st.title(
+        "Business Profile"
     )
+
+    st.caption(
+        "Build a structured commercial and strategic profile."
+    )
+
+    st.divider()
 
     clients = fetch_all(
         """
@@ -1373,14 +1131,14 @@ elif page == "Business Profile":
     if not clients:
 
         st.info(
-            "Create a client record first in Client Intake."
+            "Create a client record first."
         )
 
     else:
 
-        labels = {
+        client_map = {
             row["id"]:
-                f"{row['client_name']}"
+                row["client_name"]
                 + (
                     f" — {row['business_name']}"
                     if row["business_name"]
@@ -1391,79 +1149,72 @@ elif page == "Business Profile":
 
         selected_id = st.selectbox(
             "Select Client",
-            list(labels.keys()),
-            format_func=lambda value: labels[value],
+            list(client_map.keys()),
+            format_func=lambda value:
+                client_map[value],
         )
 
         client = fetch_one(
-            "SELECT * FROM clients WHERE id = ?",
+            """
+            SELECT *
+            FROM clients
+            WHERE id = ?
+            """,
             (selected_id,),
         )
 
         if client:
 
-            section_start(
-                "Client Identity",
-                "Information currently stored in the client intake record.",
+            st.subheader(
+                "Client Identity"
             )
 
-            column1, column2, column3 = st.columns(3)
+            identity1, identity2, identity3 = st.columns(3)
 
-            with column1:
+            with identity1:
 
                 st.write(
-                    "**Founder:**",
-                    client["client_name"],
+                    f"**Founder:** {client['client_name']}"
                 )
 
                 st.write(
-                    "**Country:**",
-                    client["country"]
-                    or "Not specified",
+                    f"**Country:** "
+                    f"{client['country'] or 'Not specified'}"
                 )
 
-            with column2:
+            with identity2:
 
                 st.write(
-                    "**Business:**",
-                    client["business_name"]
-                    or "Not specified",
+                    f"**Business:** "
+                    f"{client['business_name'] or 'Not specified'}"
                 )
 
                 st.write(
-                    "**Type:**",
-                    client["business_type"],
+                    f"**Type:** {client['business_type']}"
                 )
 
-            with column3:
+            with identity3:
 
                 st.write(
-                    "**Service:**",
-                    client["service"],
+                    f"**Service:** {client['service']}"
                 )
 
                 st.write(
-                    "**Status:**",
-                    client["status"],
+                    f"**Status:** {client['status']}"
                 )
 
-            section_end()
+            st.divider()
 
-            section_start(
-                "Strategic Profile",
-                "Complete this assessment as part of the engagement analysis.",
+            st.subheader(
+                "Strategic Profile"
             )
 
-            column1, column2 = st.columns(2)
+            profile1, profile2 = st.columns(2)
 
-            with column1:
+            with profile1:
 
                 target_market = st.text_area(
                     "Target Market",
-                    placeholder=(
-                        "Countries, regions, customer segments, "
-                        "or industries."
-                    ),
                     height=120,
                 )
 
@@ -1492,36 +1243,22 @@ elif page == "Business Profile":
                     ],
                 )
 
-            with column2:
+            with profile2:
 
                 ownership = st.text_area(
                     "Ownership / Founder Structure",
-                    placeholder=(
-                        "Founder ownership, partners, investors, "
-                        "or expected ownership."
-                    ),
                     height=120,
                 )
 
                 expansion = st.text_area(
                     "Expansion Objectives",
-                    placeholder=(
-                        "Markets, hiring, fundraising, banking, "
-                        "payments, IP, subsidiaries, etc."
-                    ),
                     height=120,
                 )
 
                 key_risks = st.text_area(
                     "Known Constraints / Risks",
-                    placeholder=(
-                        "Budget, residency, regulation, tax, "
-                        "banking, operational, or timing constraints."
-                    ),
                     height=120,
                 )
-
-            section_end()
 
             if st.button(
                 "Save Business Profile",
@@ -1529,8 +1266,8 @@ elif page == "Business Profile":
             ):
 
                 profile_note = (
-                    f"\n\n"
-                    f"BUSINESS PROFILE — {now_text()}\n"
+                    "\n\n"
+                    f"BUSINESS PROFILE — {current_timestamp()}\n"
                     f"Target market: {target_market}\n"
                     f"Revenue model: {revenue_model}\n"
                     f"Funding stage: {funding_stage}\n"
@@ -1558,27 +1295,33 @@ elif page == "Business Profile":
 
 
 # ============================================================
-# 12. JURISDICTION LENS
+# 11. JURISDICTION LENS
 # ============================================================
 
 elif page == "Jurisdiction Lens":
 
-    page_header(
-        "Jurisdiction Lens",
-        (
-            "A structured comparison tool. Scores are internal "
-            "decision-support indicators, not legal or tax conclusions."
-        ),
+    st.title(
+        "Jurisdiction Lens"
     )
 
-    section_start(
-        "Business Requirements",
-        "Adjust the importance of each criterion for the current client.",
+    st.caption(
+        "Structured comparison for decision-support purposes."
     )
 
-    column1, column2, column3, column4 = st.columns(4)
+    st.warning(
+        "The indicators below are internal analytical criteria. "
+        "They are not legal, tax, banking, or regulatory conclusions."
+    )
 
-    with column1:
+    st.divider()
+
+    st.subheader(
+        "Business Requirements"
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
 
         w_remote = st.slider(
             "Remote Friendliness",
@@ -1594,7 +1337,7 @@ elif page == "Jurisdiction Lens":
             4,
         )
 
-    with column2:
+    with c2:
 
         w_banking = st.slider(
             "Banking / Payments",
@@ -1610,7 +1353,7 @@ elif page == "Jurisdiction Lens":
             3,
         )
 
-    with column3:
+    with c3:
 
         w_cost = st.slider(
             "Cost Sensitivity",
@@ -1626,7 +1369,7 @@ elif page == "Jurisdiction Lens":
             3,
         )
 
-    with column4:
+    with c4:
 
         w_compliance = st.slider(
             "Compliance Simplicity",
@@ -1635,33 +1378,18 @@ elif page == "Jurisdiction Lens":
             3,
         )
 
-    section_end()
-
     def calculate_score(
-        jurisdiction: dict,
+        item: dict,
     ) -> float:
 
-        positive_score = (
-            jurisdiction["remote_friendliness"]
-            * w_remote
-            +
-            jurisdiction["international_fit"]
-            * w_international
-            +
-            jurisdiction["banking_payment_fit"]
-            * w_banking
-            +
-            jurisdiction["privacy"]
-            * w_privacy
-            +
-            (6 - jurisdiction["cost"])
-            * w_cost
-            +
-            (6 - jurisdiction["formation_complexity"])
-            * w_complexity
-            +
-            (6 - jurisdiction["compliance_complexity"])
-            * w_compliance
+        score = (
+            item["remote_friendliness"] * w_remote
+            + item["international_fit"] * w_international
+            + item["banking_payment_fit"] * w_banking
+            + item["privacy"] * w_privacy
+            + (6 - item["cost"]) * w_cost
+            + (6 - item["formation_complexity"]) * w_complexity
+            + (6 - item["compliance_complexity"]) * w_compliance
         )
 
         total_weight = (
@@ -1675,132 +1403,96 @@ elif page == "Jurisdiction Lens":
         )
 
         return round(
-            positive_score / total_weight,
+            score / total_weight,
             2,
         )
 
     results = []
 
-    for jurisdiction in JURISDICTIONS:
+    for item in JURISDICTIONS:
 
-        item = jurisdiction.copy()
+        copy = item.copy()
 
-        item["weighted_indicator"] = (
-            calculate_score(jurisdiction)
+        copy["indicator"] = calculate_score(
+            item
         )
 
-        results.append(item)
+        results.append(copy)
 
-    results.sort(
-        key=lambda item:
-        item["weighted_indicator"],
-        reverse=True,
+    st.divider()
+
+    st.subheader(
+        "Comparison"
     )
-
-    st.markdown("### Comparison")
 
     st.dataframe(
         [
             {
                 "Jurisdiction":
-                    result["jurisdiction"],
-
+                    item["jurisdiction"],
                 "Indicator":
-                    result["weighted_indicator"],
-
+                    item["indicator"],
                 "Remote":
-                    result["remote_friendliness"],
-
+                    item["remote_friendliness"],
                 "International":
-                    result["international_fit"],
-
+                    item["international_fit"],
                 "Banking / Payments":
-                    result["banking_payment_fit"],
-
+                    item["banking_payment_fit"],
                 "Privacy":
-                    result["privacy"],
-
+                    item["privacy"],
                 "Cost":
-                    result["cost"],
-
+                    item["cost"],
                 "Formation Complexity":
-                    result["formation_complexity"],
-
+                    item["formation_complexity"],
                 "Compliance Complexity":
-                    result["compliance_complexity"],
+                    item["compliance_complexity"],
             }
-            for result in results
+            for item in results
         ],
         use_container_width=True,
         hide_index=True,
     )
 
-    st.caption(
-        "Higher indicator values reflect stronger alignment "
-        "with the selected internal criteria. This does not "
-        "constitute a legal, tax, banking, or regulatory recommendation."
+    st.divider()
+
+    st.subheader(
+        "Jurisdiction Profiles"
     )
 
-    st.markdown("### Jurisdiction Profiles")
-
-    for result in results:
+    for item in results:
 
         with st.expander(
-            f"{result['jurisdiction']} "
-            f"— indicator {result['weighted_indicator']}"
+            item["jurisdiction"]
         ):
 
             st.write(
-                result["summary"]
+                item["summary"]
             )
 
-            st.write(
-                f"**Primary source family:** "
-                f"{result['source']}"
-            )
-
-            st.write(
-                f"**Remote friendliness:** "
-                f"{result['remote_friendliness']}/5 · "
-                f"**International fit:** "
-                f"{result['international_fit']}/5 · "
-                f"**Banking/payment fit:** "
-                f"{result['banking_payment_fit']}/5"
-            )
-
-            st.write(
-                f"**Formation complexity:** "
-                f"{result['formation_complexity']}/5 · "
-                f"**Compliance complexity:** "
-                f"{result['compliance_complexity']}/5 · "
-                f"**Privacy:** "
-                f"{result['privacy']}/5"
+            st.caption(
+                f"Source family: {item['source']}"
             )
 
 
 # ============================================================
-# 13. FORMATION ROADMAP
+# 12. FORMATION ROADMAP
 # ============================================================
 
 elif page == "Formation Roadmap":
 
-    page_header(
-        "Formation Roadmap",
-        "Generate a practical sequence from business objective to operating company.",
+    st.title(
+        "Formation Roadmap"
     )
 
-    section_start(
-        "Formation Planning Inputs",
-        (
-            "This is a planning framework. Exact legal, tax, "
-            "banking, and regulatory requirements must be verified "
-            "for the selected jurisdiction."
-        ),
+    st.caption(
+        "Convert a business objective into an organised formation sequence."
     )
 
-    column1, column2 = st.columns(2)
+    st.divider()
 
-    with column1:
+    left, right = st.columns(2)
+
+    with left:
 
         founder_country = st.text_input(
             "Founder Residence / Country",
@@ -1810,8 +1502,8 @@ elif page == "Formation Roadmap":
         target_jurisdiction = st.selectbox(
             "Target Jurisdiction",
             [
-                jurisdiction["jurisdiction"]
-                for jurisdiction in JURISDICTIONS
+                item["jurisdiction"]
+                for item in JURISDICTIONS
             ],
         )
 
@@ -1828,235 +1520,185 @@ elif page == "Formation Roadmap":
             ],
         )
 
-    with column2:
+    with right:
 
         banking_needed = st.checkbox(
             "Business banking required",
-            True,
+            value=True,
         )
 
         payment_gateway = st.checkbox(
             "International payment gateway required",
-            True,
+            value=True,
         )
 
         contractors = st.checkbox(
             "International contractors expected",
-            False,
+            value=False,
         )
 
         fundraising = st.checkbox(
             "External fundraising expected",
-            False,
+            value=False,
         )
 
         ip_protection = st.checkbox(
-            "Formal IP protection / ownership required",
-            True,
+            "Formal IP ownership required",
+            value=True,
         )
 
-    section_end()
+    st.divider()
 
     if st.button(
         "Generate Formation Roadmap",
         type="primary",
+        use_container_width=True,
     ):
 
         steps = [
             (
                 "01",
-                "Define entity purpose",
-                (
-                    "Document business model, target customers, "
-                    "ownership, and intended activities."
-                ),
+                "Define Entity Purpose",
+                "Document the business model, customers, ownership, and intended activities.",
             ),
             (
                 "02",
-                "Validate jurisdiction",
-                (
-                    f"Verify the suitability of "
-                    f"{target_jurisdiction} against current legal, "
-                    "tax, banking, and operational requirements."
-                ),
+                "Validate Jurisdiction",
+                f"Verify the current requirements applicable to {target_jurisdiction}.",
             ),
             (
                 "03",
-                "Prepare formation information",
-                (
-                    "Collect founder identity information, "
-                    "registered-agent details where applicable, "
-                    "ownership information, and company purpose."
-                ),
+                "Prepare Formation Information",
+                "Collect founder, ownership, address, and company information.",
             ),
             (
                 "04",
-                "Form the entity",
-                (
-                    "Complete the applicable company registration "
-                    "process and retain official formation records."
-                ),
+                "Form the Entity",
+                "Complete the applicable company-registration process.",
             ),
             (
                 "05",
-                "Establish governance records",
-                (
-                    "Maintain operating agreement, resolutions, "
-                    "ownership records, and other core corporate "
-                    "documents as applicable."
-                ),
+                "Establish Governance",
+                "Maintain operating agreements, resolutions, ownership records, and governance documents as applicable.",
             ),
             (
                 "06",
-                "Tax / identification setup",
-                (
-                    "Determine and obtain applicable tax "
-                    "identification and registrations."
-                ),
-            ),
-            (
-                "07",
-                "Banking and payments",
-                (
-                    "Apply for business banking and payment "
-                    "infrastructure, subject to provider eligibility "
-                    "and compliance review."
-                ),
-            ),
-            (
-                "08",
-                "Operational infrastructure",
-                (
-                    "Set up accounting, contracts, invoicing, "
-                    "document storage, security, and internal controls."
-                ),
-            ),
-            (
-                "09",
-                "Compliance calendar",
-                (
-                    "Create recurring filing, tax, reporting, "
-                    "licence, and registered-agent obligations."
-                ),
-            ),
-            (
-                "10",
-                "Launch and monitor",
-                (
-                    "Begin operations and continuously monitor "
-                    "corporate, financial, commercial, and "
-                    "compliance state."
-                ),
+                "Tax / Identification Setup",
+                "Determine and obtain applicable identification and registrations.",
             ),
         ]
 
+        if banking_needed:
+
+            steps.append(
+                (
+                    "07",
+                    "Business Banking",
+                    "Establish appropriate business banking subject to provider eligibility.",
+                )
+            )
+
+        if payment_gateway:
+
+            steps.append(
+                (
+                    "08",
+                    "Payment Infrastructure",
+                    "Establish payment processing and invoicing infrastructure subject to provider requirements.",
+                )
+            )
+
+        steps.append(
+            (
+                "09",
+                "Operational Infrastructure",
+                "Set up accounting, contracts, records, security, and document management.",
+            )
+        )
+
+        if ip_protection:
+
+            steps.append(
+                (
+                    "10",
+                    "IP Ownership",
+                    "Confirm ownership or licensing of software, branding, documentation, and contractor-created work.",
+                )
+            )
+
         if contractors:
 
-            steps.insert(
-                8,
+            steps.append(
                 (
-                    "09A",
-                    "Contractor framework",
-                    (
-                        "Create contractor agreements, onboarding "
-                        "controls, IP assignment terms, confidentiality "
-                        "provisions, and payment processes as appropriate."
-                    ),
-                ),
+                    "11",
+                    "Contractor Framework",
+                    "Implement appropriate contractor agreements, confidentiality, IP, onboarding, and payment controls.",
+                )
             )
 
         if fundraising:
 
-            steps.insert(
-                9,
+            steps.append(
                 (
-                    "09B",
-                    "Capital-readiness",
-                    (
-                        "Organise cap table, financial records, "
-                        "governance documents, IP ownership, and "
-                        "investor materials."
-                    ),
-                ),
+                    "12",
+                    "Capital Readiness",
+                    "Organise governance, financial records, ownership records, IP ownership, and investor materials.",
+                )
             )
 
-        if ip_protection:
-
-            steps.insert(
-                8,
-                (
-                    "08A",
-                    "IP ownership",
-                    (
-                        "Confirm that software, branding, documentation, "
-                        "designs, and contractor-created work are properly "
-                        "owned or licensed by the company."
-                    ),
-                ),
+        steps.append(
+            (
+                "13",
+                "Compliance Calendar",
+                "Track recurring corporate, tax, filing, licence, and reporting obligations.",
             )
+        )
 
-        st.markdown(
-            "### Recommended Planning Sequence"
+        steps.append(
+            (
+                "14",
+                "Launch and Monitor",
+                "Begin operations and continuously monitor the company's corporate, financial, commercial, and compliance state.",
+            )
+        )
+
+        st.subheader(
+            "Formation Sequence"
         )
 
         for number, title, description in steps:
 
-            st.markdown(
-                f"""
-                <div class="section-card">
+            with st.container(border=True):
 
-                    <div style="
-                        display:flex;
-                        gap:16px;
-                        align-items:flex-start;
-                    ">
+                st.markdown(
+                    f"### {number} — {title}"
+                )
 
-                        <div style="
-                            color:#d7b45a;
-                            font-size:1.3rem;
-                            font-weight:800;
-                            min-width:42px;
-                        ">
-                            {number}
-                        </div>
+                st.write(
+                    description
+                )
 
-                        <div>
-
-                            <div style="
-                                font-weight:800;
-                                color:#fff;
-                                font-size:1.05rem;
-                            ">
-                                {title}
-                            </div>
-
-                            <div
-                                class="small-note"
-                                style="margin-top:.3rem;"
-                            >
-                                {description}
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+    st.caption(
+        f"Planning context: founder country = {founder_country}; "
+        f"business model = {business_model}."
+    )
 
 
 # ============================================================
-# 14. COMPLIANCE
+# 13. COMPLIANCE
 # ============================================================
 
 elif page == "Compliance":
 
-    page_header(
-        "Compliance Checklist",
-        "Track recurring operational and corporate obligations at a high level.",
+    st.title(
+        "Compliance Checklist"
     )
+
+    st.caption(
+        "High-level operational checklist. Requirements must be verified against current official sources."
+    )
+
+    st.divider()
 
     jurisdiction = st.selectbox(
         "Operating / Formation Jurisdiction",
@@ -2068,26 +1710,22 @@ elif page == "Compliance":
 
     checklist = [
         "Maintain formation and governance records",
-        "Maintain registered agent / official address requirements where applicable",
-        "Track annual reports / periodic company filings",
+        "Maintain registered-agent or official-address requirements where applicable",
+        "Track annual reports and periodic filings",
         "Track federal, state, or local tax obligations",
         "Maintain accounting and financial records",
         "Reconcile business bank accounts",
-        "Review payment-provider compliance requirements",
+        "Review payment-provider requirements",
         "Maintain client contracts and engagement records",
         "Maintain contractor agreements and IP provisions",
-        "Review licences / permits relevant to business activity",
+        "Review applicable licences and permits",
         "Review data protection and privacy obligations",
         "Review cybersecurity and access controls",
-        "Review beneficial ownership / reporting requirements where applicable",
+        "Review applicable ownership / reporting requirements",
         "Maintain business continuity and document backups",
     ]
 
-    st.markdown(
-        f"### Checklist — {jurisdiction}"
-    )
-
-    completed = []
+    completed = 0
 
     for index, item in enumerate(checklist):
 
@@ -2096,37 +1734,38 @@ elif page == "Compliance":
             key=f"compliance_{index}",
         ):
 
-            completed.append(item)
+            completed += 1
 
     progress = (
-        len(completed) / len(checklist)
+        completed / len(checklist)
     )
 
     st.progress(progress)
 
-    st.caption(
-        f"{len(completed)} of "
-        f"{len(checklist)} items marked complete."
+    st.write(
+        f"{completed} of {len(checklist)} checklist items completed."
     )
 
-    st.warning(
-        "Compliance requirements vary by jurisdiction, entity type, "
-        "activity, ownership, residency, and changes in law. "
-        "Verify current obligations with appropriate professionals "
-        "and official authorities."
+    st.info(
+        f"Current jurisdiction selected: {jurisdiction}"
     )
 
 
 # ============================================================
-# 15. REPORT GENERATOR
+# 14. REPORT GENERATOR
 # ============================================================
 
 elif page == "Report Generator":
 
-    page_header(
-        "Report Generator",
-        "Generate and save a structured client-facing or internal advisory report.",
+    st.title(
+        "Report Generator"
     )
+
+    st.caption(
+        "Generate structured reports from stored client information."
+    )
+
+    st.divider()
 
     clients = fetch_all(
         """
@@ -2146,12 +1785,12 @@ elif page == "Report Generator":
     if not clients:
 
         st.info(
-            "Create a client record first in Client Intake."
+            "Create a client record first."
         )
 
     else:
 
-        labels = {
+        client_map = {
             row["id"]:
                 row["client_name"]
                 + (
@@ -2164,12 +1803,17 @@ elif page == "Report Generator":
 
         selected_id = st.selectbox(
             "Client",
-            list(labels.keys()),
-            format_func=lambda value: labels[value],
+            list(client_map.keys()),
+            format_func=lambda value:
+                client_map[value],
         )
 
         client = fetch_one(
-            "SELECT * FROM clients WHERE id = ?",
+            """
+            SELECT *
+            FROM clients
+            WHERE id = ?
+            """,
             (selected_id,),
         )
 
@@ -2186,31 +1830,29 @@ elif page == "Report Generator":
         additional_context = st.text_area(
             "Additional Context",
             height=180,
-            placeholder=(
-                "Add findings, assumptions, questions, "
-                "or recommendations that should appear in the report."
-            ),
         )
 
         if st.button(
             "Generate & Save Report",
             type="primary",
+            use_container_width=True,
         ):
 
-            timestamp = now_text()
+            timestamp = current_timestamp()
 
-            report = f"""# PieroloOS — {report_type}
+            report = f"""
+# PieroloOS — {report_type}
 
 **PieroloCorp International LLC**
 
 ## Client
 
-- **Name:** {client['client_name']}
-- **Business:** {client['business_name'] or 'Not specified'}
-- **Country:** {client['country'] or 'Not specified'}
-- **Service:** {client['service']}
-- **Engagement Status:** {client['status']}
-- **Generated:** {timestamp}
+- Name: {client['client_name']}
+- Business: {client['business_name'] or 'Not specified'}
+- Country: {client['country'] or 'Not specified'}
+- Service: {client['service']}
+- Engagement Status: {client['status']}
+- Generated: {timestamp}
 
 ## Business Information
 
@@ -2224,25 +1866,23 @@ elif page == "Report Generator":
 
 1. Verify material facts against primary sources.
 2. Confirm jurisdiction-specific legal, tax, banking, and regulatory requirements.
-3. Separate factual findings from assumptions.
+3. Separate facts from assumptions.
 4. Record client decisions and approvals.
-5. Preserve supporting documents and evidence.
+5. Preserve supporting evidence.
 6. Update the engagement record as the matter progresses.
 
 ## Disclaimer
 
-This report is generated by PieroloOS as a decision-support and professional-service workflow aid. It is not legal, tax, accounting, financial, immigration, regulatory, or other licensed professional advice. Current requirements should be independently verified with the appropriate qualified professional or official authority.
+This report is generated by PieroloOS as a decision-support and professional-service workflow aid. It is not legal, tax, accounting, financial, immigration, regulatory, or other licensed professional advice.
 """
 
-            safe_name = safe_filename(
-                f"{client['client_name']}_"
-                f"{report_type}_"
-                f"{timestamp}"
+            filename = safe_filename(
+                f"{client['client_name']}_{report_type}_{timestamp}"
             )
 
             report_path = (
                 REPORT_DIR
-                / f"{safe_name}.md"
+                / f"{filename}.md"
             )
 
             report_path.write_text(
@@ -2276,19 +1916,25 @@ This report is generated by PieroloOS as a decision-support and professional-ser
             st.download_button(
                 "Download Markdown Report",
                 data=report,
-                file_name=f"{safe_name}.md",
+                file_name=f"{filename}.md",
                 mime="text/markdown",
                 use_container_width=True,
             )
 
             with st.expander(
-                "Preview Report",
+                "Report Preview",
                 expanded=True,
             ):
 
-                st.markdown(report)
+                st.markdown(
+                    report
+                )
 
-    st.markdown("### Previous Reports")
+    st.divider()
+
+    st.subheader(
+        "Previous Reports"
+    )
 
     reports = fetch_all(
         """
@@ -2319,15 +1965,20 @@ This report is generated by PieroloOS as a decision-support and professional-ser
 
 
 # ============================================================
-# 16. ENGAGEMENT RECORDS
+# 15. ENGAGEMENT RECORDS
 # ============================================================
 
 elif page == "Engagement Records":
 
-    page_header(
-        "Engagement Records",
-        "Maintain a lightweight operational register for active client matters.",
+    st.title(
+        "Engagement Records"
     )
+
+    st.caption(
+        "Maintain the operational register for client matters."
+    )
+
+    st.divider()
 
     clients = fetch_all(
         """
@@ -2342,7 +1993,7 @@ elif page == "Engagement Records":
 
     if clients:
 
-        labels = {
+        client_map = {
             row["id"]:
                 row["client_name"]
                 + (
@@ -2353,13 +2004,15 @@ elif page == "Engagement Records":
             for row in clients
         }
 
-        with st.form("engagement_form"):
+        with st.form(
+            "engagement_form"
+        ):
 
             selected_client = st.selectbox(
                 "Client",
-                list(labels.keys()),
+                list(client_map.keys()),
                 format_func=lambda value:
-                    labels[value],
+                    client_map[value],
             )
 
             service = st.text_input(
@@ -2388,15 +2041,15 @@ elif page == "Engagement Records":
                 height=120,
             )
 
-            create_engagement = st.form_submit_button(
+            create = st.form_submit_button(
                 "Create Engagement Record",
                 type="primary",
                 use_container_width=True,
             )
 
-        if create_engagement:
+        if create:
 
-            client_row = fetch_one(
+            client = fetch_one(
                 """
                 SELECT client_name
                 FROM clients
@@ -2405,7 +2058,7 @@ elif page == "Engagement Records":
                 (selected_client,),
             )
 
-            if client_row:
+            if client:
 
                 execute_write(
                     """
@@ -2421,12 +2074,12 @@ elif page == "Engagement Records":
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        client_row["client_name"],
+                        client["client_name"],
                         service.strip(),
                         status,
                         next_action.strip(),
                         notes.strip(),
-                        now_text(),
+                        current_timestamp(),
                     ),
                 )
 
@@ -2439,10 +2092,14 @@ elif page == "Engagement Records":
     else:
 
         st.info(
-            "Create a client record first in Client Intake."
+            "Create a client record first."
         )
 
-    st.markdown("### Engagement Register")
+    st.divider()
+
+    st.subheader(
+        "Engagement Register"
+    )
 
     engagements = fetch_all(
         """
@@ -2467,35 +2124,25 @@ elif page == "Engagement Records":
             hide_index=True,
         )
 
-        st.markdown(
-            "### Update Engagement Status"
+        st.divider()
+
+        st.subheader(
+            "Update Engagement"
         )
 
-        engagement_ids = [
-            row["id"]
+        engagement_map = {
+            row["id"]:
+                f"#{row['id']} — "
+                f"{row['client_name']} — "
+                f"{row['service'] or 'Service not specified'}"
             for row in engagements
-        ]
-
-        def engagement_label(
-            engagement_id: int,
-        ) -> str:
-
-            for row in engagements:
-
-                if row["id"] == engagement_id:
-
-                    return (
-                        f"#{row['id']} — "
-                        f"{row['client_name']} — "
-                        f"{row['service'] or 'Service not specified'}"
-                    )
-
-            return str(engagement_id)
+        }
 
         selected_engagement = st.selectbox(
-            "Select Engagement",
-            engagement_ids,
-            format_func=engagement_label,
+            "Engagement",
+            list(engagement_map.keys()),
+            format_func=lambda value:
+                engagement_map[value],
         )
 
         new_status = st.selectbox(
@@ -2511,31 +2158,29 @@ elif page == "Engagement Records":
             ],
         )
 
-        new_next_action = st.text_input(
-            "Next Action",
-            key="engagement_next_action",
+        new_action = st.text_input(
+            "Next Action"
         )
 
         if st.button(
             "Update Engagement",
             type="primary",
+            use_container_width=True,
         ):
 
             execute_write(
                 """
                 UPDATE engagements
-
                 SET
                     status = ?,
                     next_action = ?,
                     updated_at = ?
-
                 WHERE id = ?
                 """,
                 (
                     new_status,
-                    new_next_action.strip(),
-                    now_text(),
+                    new_action.strip(),
+                    current_timestamp(),
                     selected_engagement,
                 ),
             )
@@ -2549,29 +2194,23 @@ elif page == "Engagement Records":
     else:
 
         st.info(
-            "No engagement records yet."
+            "No engagement records have been created yet."
         )
 
 
 # ============================================================
-# 17. FOOTER
+# 16. FOOTER
 # ============================================================
 
-st.markdown(
-    """
-    <div class="footer">
+st.divider()
 
-        <b>PIEROLOOS v0.1</b>
-        · Professional Service Operating System
-        · PieroloCorp International LLC
+st.caption(
+    "PIEROLOOS v0.1 · Professional Service Operating System · "
+    "PieroloCorp International LLC"
+)
 
-        <br>
-
-        Decision-support prototype · Verify legal, tax,
-        regulatory, banking, and compliance matters with
-        appropriate professionals and official authorities.
-
-    </div>
-    """,
-    unsafe_allow_html=True,
+st.caption(
+    "Decision-support prototype. Verify legal, tax, regulatory, "
+    "banking, and compliance matters with appropriate professionals "
+    "and official authorities."
 )
