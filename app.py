@@ -1,1801 +1,750 @@
-"""
-PIEROLOOS v0.1 — Core MVP + Premium UX/UI
-PieroloCorp International LLC
-
-============================================================
-PURPOSE
-============================================================
-
-PieroloOS is a professional-service operating system MVP for:
-
-1. Client Intake
-2. Business Profile
-3. Jurisdiction Lens
-4. Formation Roadmap
-5. Compliance Checklist
-6. Report Generator
-7. Engagement Records
-8. Basic engagement-state management
-
-============================================================
-RUN
-============================================================
-
-pip install -r requirements.txt
-streamlit run app.py
-
-============================================================
-EXPECTED REPOSITORY STRUCTURE
-============================================================
-
-pieroloos/
-│
-├── app.py
-├── requirements.txt
-│
-└── assets/
-    ├── pieroloos_background.svg
-    └── pierolocorp_logo.png
-
-============================================================
-IMPORTANT
-============================================================
-
-This is an MVP and decision-support prototype.
-
-Jurisdiction information is an editable research dataset and
-must be verified against current authoritative sources before
-client delivery.
-
-Generated reports are decision-support drafts and do not
-constitute legal, tax, accounting, regulatory, investment,
-or other professional advice.
-"""
-
-from __future__ import annotations
-
+from pathlib import Path
 import base64
-import json
+import html
 import sqlite3
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 import streamlit as st
 
 
 # ============================================================
-# APPLICATION CONFIGURATION
+# PIEROLOOS v0.1
+# PROFESSIONAL SERVICE OPERATING SYSTEM
+# PIEROLOCORP INTERNATIONAL LLC
 # ============================================================
 
-APP_NAME = "PieroloOS"
-APP_VERSION = "v0.1"
-
-DB_PATH = Path("pieroloos.db")
-
-ASSET_DIR = Path("assets")
-EXPORT_DIR = Path("reports")
-
-EXPORT_DIR.mkdir(exist_ok=True)
-
-
 st.set_page_config(
-    page_title=f"{APP_NAME} {APP_VERSION}",
-    page_icon="P",
+    page_title="PieroloOS | PieroloCorp International LLC",
+    page_icon="✦",
     layout="wide",
-    initial_sidebar_state="auto",
+    initial_sidebar_state="expanded",
 )
 
 
 # ============================================================
-# ASSET HELPERS
+# 1. PROJECT PATHS
 # ============================================================
 
-def asset_uri(path: Path) -> str:
-    """
-    Convert an image/SVG file into a Base64 data URI.
+BASE_DIR = Path(__file__).resolve().parent
 
-    This makes the background work reliably on Streamlit Cloud
-    without requiring an external URL.
-    """
-
-    if not path.exists():
-        return ""
-
-    try:
-        if path.suffix.lower() == ".svg":
-            mime = "image/svg+xml"
-        elif path.suffix.lower() in [".jpg", ".jpeg"]:
-            mime = "image/jpeg"
-        else:
-            mime = "image/png"
-
-        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
-
-        return f"data:{mime};base64,{encoded}"
-
-    except Exception:
-        return ""
-
+ASSET_DIR = BASE_DIR / "assets"
+REPORT_DIR = BASE_DIR / "reports"
+DB_PATH = BASE_DIR / "pieroloos.db"
 
 BACKGROUND_PATH = ASSET_DIR / "pieroloos_background.svg"
-LOGO_PATH = ASSET_DIR / "pierolocorp_logo.png"
 
-BG_URI = asset_uri(BACKGROUND_PATH)
+# Supports both possible logo spellings.
+LOGO_CANDIDATES = [
+    ASSET_DIR / "pierolocorp_logo.png",
+    ASSET_DIR / "pierolooscorp_logo.png",
+]
+
+LOGO_PATH = next(
+    (path for path in LOGO_CANDIDATES if path.exists()),
+    None,
+)
+
+REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ============================================================
-# DATABASE
+# 2. ASSET FUNCTIONS
 # ============================================================
 
-def db() -> sqlite3.Connection:
-    """
-    Open SQLite database connection.
-    """
+@st.cache_data(show_spinner=False)
+def get_background_uri() -> str:
+    """Convert the SVG background into a browser-safe data URI."""
+    if not BACKGROUND_PATH.exists():
+        return ""
 
-    conn = sqlite3.connect(DB_PATH)
+    encoded = base64.b64encode(
+        BACKGROUND_PATH.read_bytes()
+    ).decode("ascii")
 
-    conn.row_factory = sqlite3.Row
-
-    return conn
+    return f"data:image/svg+xml;base64,{encoded}"
 
 
-def init_db() -> None:
-    """
-    Create MVP database tables.
-    """
+BACKGROUND_URI = get_background_uri()
 
-    conn = db()
 
-    cur = conn.cursor()
+def asset_status() -> tuple[bool, bool]:
+    """Return background and logo availability."""
+    background_exists = BACKGROUND_PATH.exists()
+    logo_exists = LOGO_PATH is not None
 
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS engagements (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            client_name TEXT NOT NULL,
-            business_name TEXT,
-            objective TEXT,
-            service_type TEXT,
-            status TEXT DEFAULT 'Intake',
-            data_json TEXT NOT NULL
-        )
-        """
+    return background_exists, logo_exists
+
+
+background_ok, logo_ok = asset_status()
+
+
+# ============================================================
+# 3. DATABASE
+# ============================================================
+
+def get_connection() -> sqlite3.Connection:
+    """Open the local PieroloOS SQLite database."""
+    connection = sqlite3.connect(
+        DB_PATH,
+        check_same_thread=False,
     )
 
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS decisions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT NOT NULL,
-            engagement_id INTEGER,
-            decision_question TEXT,
-            decision TEXT,
-            rationale TEXT,
-            data_json TEXT
-        )
-        """
-    )
+    connection.row_factory = sqlite3.Row
 
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS reports (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT NOT NULL,
-            engagement_id INTEGER,
-            filename TEXT,
-            report_type TEXT,
-            data_json TEXT
-        )
-        """
-    )
-
-    conn.commit()
-
-    conn.close()
+    return connection
 
 
-init_db()
-
-
-# ============================================================
-# TIME / GENERAL HELPERS
-# ============================================================
-
-def now_iso() -> str:
-    """
-    Return UTC timestamp.
-    """
-
-    return datetime.utcnow().replace(
-        microsecond=0
-    ).isoformat() + "Z"
-
-
-def safe_filename(value: str) -> str:
-    """
-    Convert text into a safe filename.
-    """
-
-    cleaned = "".join(
-        character
-        if character.isalnum() or character in ("-", "_")
-        else "_"
-        for character in value.strip()
-    )
-
-    return cleaned[:80] or "engagement"
-
-
-def score_label(score: float) -> str:
-    """
-    Convert a 1–5 score to a readable label.
-    """
-
-    if score >= 4.5:
-        return "Very strong"
-
-    if score >= 3.5:
-        return "Strong"
-
-    if score >= 2.5:
-        return "Moderate"
-
-    if score >= 1.5:
-        return "Lower"
-
-    return "Very low"
-
-
-# ============================================================
-# DATABASE OPERATIONS
-# ============================================================
-
-def save_engagement(data: Dict[str, Any]) -> int:
-    """
-    Create a new engagement.
-    """
-
-    conn = db()
-
-    timestamp = now_iso()
-
-    cursor = conn.cursor()
+def init_database() -> None:
+    """Create required database tables."""
+    connection = get_connection()
+    cursor = connection.cursor()
 
     cursor.execute(
         """
-        INSERT INTO engagements
-        (
-            created_at,
-            updated_at,
-            client_name,
-            business_name,
-            objective,
-            service_type,
-            status,
-            data_json
+        CREATE TABLE IF NOT EXISTS clients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_name TEXT NOT NULL,
+            email TEXT,
+            phone TEXT,
+            country TEXT,
+            business_name TEXT,
+            business_type TEXT,
+            service TEXT,
+            status TEXT DEFAULT 'New',
+            notes TEXT,
+            created_at TEXT NOT NULL
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            timestamp,
-            timestamp,
-            data.get("client_name", ""),
-            data.get("business_name", ""),
-            data.get("objective", ""),
-            data.get("service_type", ""),
-            "Intake",
-            json.dumps(
-                data,
-                ensure_ascii=False,
-            ),
-        ),
+        """
     )
 
-    engagement_id = int(cursor.lastrowid)
-
-    conn.commit()
-
-    conn.close()
-
-    return engagement_id
-
-
-def load_engagements() -> List[sqlite3.Row]:
-    """
-    Return all engagements.
-    """
-
-    conn = db()
-
-    rows = conn.execute(
+    cursor.execute(
         """
-        SELECT *
-        FROM engagements
-        ORDER BY id DESC
+        CREATE TABLE IF NOT EXISTS reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_name TEXT,
+            report_type TEXT,
+            content TEXT,
+            created_at TEXT NOT NULL
+        )
         """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS engagements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_name TEXT,
+            service TEXT,
+            status TEXT DEFAULT 'Open',
+            next_action TEXT,
+            notes TEXT,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+
+    connection.commit()
+    connection.close()
+
+
+init_database()
+
+
+# ============================================================
+# 4. DATABASE HELPERS
+# ============================================================
+
+def execute_write(
+    query: str,
+    params: tuple = (),
+) -> None:
+    connection = get_connection()
+
+    connection.execute(
+        query,
+        params,
+    )
+
+    connection.commit()
+    connection.close()
+
+
+def fetch_all(
+    query: str,
+    params: tuple = (),
+) -> list[sqlite3.Row]:
+    connection = get_connection()
+
+    rows = connection.execute(
+        query,
+        params,
     ).fetchall()
 
-    conn.close()
+    connection.close()
 
     return rows
 
 
-def load_engagement(
-    engagement_id: int,
+def fetch_one(
+    query: str,
+    params: tuple = (),
 ) -> Optional[sqlite3.Row]:
-    """
-    Load a single engagement.
-    """
+    connection = get_connection()
 
-    conn = db()
-
-    row = conn.execute(
-        """
-        SELECT *
-        FROM engagements
-        WHERE id = ?
-        """,
-        (engagement_id,),
+    row = connection.execute(
+        query,
+        params,
     ).fetchone()
 
-    conn.close()
+    connection.close()
 
     return row
 
 
-def update_engagement_status(
-    engagement_id: int,
-    status: str,
-) -> None:
-    """
-    Update engagement status.
-    """
-
-    conn = db()
-
-    conn.execute(
-        """
-        UPDATE engagements
-        SET status = ?,
-            updated_at = ?
-        WHERE id = ?
-        """,
-        (
-            status,
-            now_iso(),
-            engagement_id,
-        ),
-    )
-
-    conn.commit()
-
-    conn.close()
-
-
-def save_report_record(
-    engagement_id: Optional[int],
-    filename: str,
-    report_type: str,
-) -> None:
-    """
-    Record report generation.
-    """
-
-    conn = db()
-
-    conn.execute(
-        """
-        INSERT INTO reports
-        (
-            created_at,
-            engagement_id,
-            filename,
-            report_type,
-            data_json
-        )
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (
-            now_iso(),
-            engagement_id,
-            filename,
-            report_type,
-            json.dumps(
-                {
-                    "application": APP_NAME,
-                    "version": APP_VERSION,
-                }
-            ),
-        ),
-    )
-
-    conn.commit()
-
-    conn.close()
-
-
-def report_count() -> int:
-    """
-    Return total generated reports.
-    """
-
-    conn = db()
-
-    result = conn.execute(
-        """
-        SELECT COUNT(*) AS total
-        FROM reports
-        """
-    ).fetchone()
-
-    conn.close()
-
-    return int(result["total"])
-
-
-# ============================================================
-# BUSINESS PROFILE
-# ============================================================
-
-def build_profile(
-    data: Dict[str, Any],
-) -> Dict[str, Any]:
-    """
-    Convert raw intake into structured business profile.
-    """
-
-    return {
-        "client": data.get("client_name"),
-        "business": data.get("business_name"),
-        "business_model": data.get("business_model"),
-        "industry": data.get("industry"),
-        "customer_market": data.get("customer_market"),
-        "owner_residence": data.get("owner_residence"),
-        "target_jurisdictions": data.get(
-            "target_jurisdictions"
-        ),
-        "capital": data.get("capital"),
-        "employees": data.get("employees"),
-        "payment_needs": data.get("payment_needs"),
-        "service": data.get("service_type"),
-        "objective": data.get("objective"),
-        "constraints": data.get("constraints"),
+def count_records(table: str) -> int:
+    allowed_tables = {
+        "clients",
+        "reports",
+        "engagements",
     }
 
+    if table not in allowed_tables:
+        return 0
+
+    row = fetch_one(
+        f"SELECT COUNT(*) AS total FROM {table}"
+    )
+
+    return int(row["total"]) if row else 0
+
 
 # ============================================================
-# JURISDICTION RESEARCH DATASET
+# 5. JURISDICTION DATA
 # ============================================================
 
-JURISDICTIONS: Dict[str, Dict[str, Any]] = {
-
-    "United States — New Mexico": {
-        "code": "US-NM",
-        "entity": "LLC",
-        "currency": "USD",
-
+JURISDICTIONS = [
+    {
+        "jurisdiction": "United States — New Mexico",
+        "country": "United States",
         "formation_complexity": 2,
-        "cost_index": 2,
+        "cost": 2,
         "remote_friendliness": 5,
-        "international_business_fit": 4,
-        "banking_payment_fit": 4,
-        "compliance_complexity": 3,
-        "privacy_index": 4,
-
-        "notes": (
-            "Initial research profile only. "
-            "Verify current federal and state obligations."
-        ),
-
-        "official_sources": [
-            "New Mexico Secretary of State",
-            "IRS",
-        ],
-    },
-
-    "United States — Delaware": {
-        "code": "US-DE",
-        "entity": "LLC",
-        "currency": "USD",
-
-        "formation_complexity": 3,
-        "cost_index": 3,
-        "remote_friendliness": 5,
-        "international_business_fit": 5,
+        "international_fit": 4,
         "banking_payment_fit": 5,
         "compliance_complexity": 3,
-        "privacy_index": 4,
-
-        "notes": (
-            "Common commercial jurisdiction. "
-            "Current obligations and fees require verification."
+        "privacy": 4,
+        "summary": (
+            "Flexible U.S. LLC jurisdiction commonly considered "
+            "by remote founders."
         ),
-
-        "official_sources": [
-            "Delaware Division of Corporations",
-            "IRS",
-        ],
+        "source": (
+            "New Mexico Secretary of State / IRS / FinCEN"
+        ),
     },
-
-    "United Kingdom": {
-        "code": "GB",
-        "entity": "Private limited company",
-        "currency": "GBP",
-
+    {
+        "jurisdiction": "United States — Delaware",
+        "country": "United States",
+        "formation_complexity": 3,
+        "cost": 3,
+        "remote_friendliness": 5,
+        "international_fit": 5,
+        "banking_payment_fit": 5,
+        "compliance_complexity": 4,
+        "privacy": 3,
+        "summary": (
+            "Major U.S. corporate jurisdiction with extensive "
+            "business-law infrastructure."
+        ),
+        "source": (
+            "Delaware Division of Corporations / IRS / FinCEN"
+        ),
+    },
+    {
+        "jurisdiction": "United Kingdom",
+        "country": "United Kingdom",
         "formation_complexity": 2,
-        "cost_index": 2,
+        "cost": 3,
         "remote_friendliness": 4,
-        "international_business_fit": 4,
+        "international_fit": 5,
         "banking_payment_fit": 4,
         "compliance_complexity": 4,
-        "privacy_index": 3,
-
-        "notes": (
-            "Initial comparison profile only. "
-            "Verify Companies House and HMRC requirements."
+        "privacy": 3,
+        "summary": (
+            "Established international business environment "
+            "with strong corporate infrastructure."
         ),
-
-        "official_sources": [
-            "Companies House",
-            "HM Revenue & Customs",
-        ],
+        "source": "Companies House / HMRC",
     },
-
-    "Nigeria": {
-        "code": "NG",
-        "entity": "Limited Liability Company",
-        "currency": "NGN",
-
-        "formation_complexity": 2,
-        "cost_index": 1,
+    {
+        "jurisdiction": "Nigeria",
+        "country": "Nigeria",
+        "formation_complexity": 3,
+        "cost": 2,
         "remote_friendliness": 3,
-        "international_business_fit": 3,
+        "international_fit": 3,
         "banking_payment_fit": 3,
         "compliance_complexity": 4,
-        "privacy_index": 3,
-
-        "notes": (
-            "Initial comparison profile only. "
-            "Verify CAC, FIRS and other applicable requirements."
+        "privacy": 2,
+        "summary": (
+            "Relevant for businesses operating locally and "
+            "serving the Nigerian market."
         ),
-
-        "official_sources": [
-            "Corporate Affairs Commission",
-            "Federal Inland Revenue Service",
-        ],
+        "source": "CAC / FIRS / relevant Nigerian authorities",
     },
-}
+]
 
 
 # ============================================================
-# JURISDICTION ENGINE
+# 6. GLOBAL CSS
 # ============================================================
 
-def compare_jurisdictions(
-    selected: List[str],
-    priorities: Dict[str, float],
-) -> List[Dict[str, Any]]:
+def inject_css() -> None:
 
-    results = []
+    if BACKGROUND_URI:
 
-    for name in selected:
-
-        item = JURISDICTIONS[name]
-
-        weighted = (
-            item["formation_complexity"]
-            * priorities["formation"]
-
-            + (6 - item["cost_index"])
-            * priorities["cost"]
-
-            + item["remote_friendliness"]
-            * priorities["remote"]
-
-            + item["international_business_fit"]
-            * priorities["international"]
-
-            + item["banking_payment_fit"]
-            * priorities["payments"]
-
-            + (6 - item["compliance_complexity"])
-            * priorities["compliance"]
-
-            + item["privacy_index"]
-            * priorities["privacy"]
-        )
-
-        denominator = (
-            sum(priorities.values())
-            * 5
-        )
-
-        normalized = (
-            round(
-                (weighted / denominator)
-                * 100,
-                1,
-            )
-            if denominator
-            else 0
-        )
-
-        results.append(
-            {
-                "jurisdiction": name,
-                "entity": item["entity"],
-                "score": normalized,
-                "score_label": score_label(
-                    normalized / 20
+        background_rule = f"""
+            background-image:
+                linear-gradient(
+                    rgba(5, 5, 18, 0.72),
+                    rgba(5, 5, 18, 0.88)
                 ),
-                "notes": item["notes"],
-                "sources": item["official_sources"],
-            }
-        )
-
-    return sorted(
-        results,
-        key=lambda x: x["score"],
-        reverse=True,
-    )
-
-
-# ============================================================
-# FORMATION ROADMAP
-# ============================================================
-
-def formation_roadmap(
-    _: Dict[str, Any],
-) -> List[str]:
-
-    return [
-        "Confirm business objective, customer, activities and target markets.",
-
-        "Confirm proposed entity architecture and jurisdictions "
-        "for professional review.",
-
-        "Confirm name availability and formation requirements.",
-
-        "Prepare formation information and required "
-        "identification/documentation.",
-
-        "File formation documents through the appropriate "
-        "authority/provider.",
-
-        "Establish the company's core records and governance "
-        "documentation.",
-
-        "Establish appropriate business banking/payment infrastructure.",
-
-        "Set up accounting, invoicing and transaction-record controls.",
-
-        "Establish applicable tax/compliance calendar.",
-
-        "Establish contracts, IP ownership and confidentiality controls.",
-
-        "Complete operational onboarding and launch checklist.",
-
-        "Schedule a post-formation review after the first "
-        "operating period.",
-    ]
-
-
-# ============================================================
-# COMPLIANCE CHECKLIST
-# ============================================================
-
-def compliance_checklist(
-    _: Dict[str, Any],
-) -> List[Dict[str, str]]:
-
-    return [
-
-        {
-            "item": "Entity status",
-            "frequency": "As required",
-            "status": "Research required",
-            "evidence": "Formation/registration record",
-        },
-
-        {
-            "item": (
-                "Registered-agent / "
-                "registered-office requirement"
-            ),
-            "frequency": "Ongoing",
-            "status": "Research required",
-            "evidence": (
-                "Service agreement / official record"
-            ),
-        },
-
-        {
-            "item": (
-                "Tax registration and "
-                "filing obligations"
-            ),
-            "frequency": "Jurisdiction-dependent",
-            "status": "Professional verification",
-            "evidence": (
-                "Tax registrations and filings"
-            ),
-        },
-
-        {
-            "item": "Annual / periodic company filing",
-            "frequency": "Jurisdiction-dependent",
-            "status": "Research required",
-            "evidence": (
-                "Filed return / confirmation"
-            ),
-        },
-
-        {
-            "item": (
-                "Business licence / "
-                "regulated activity review"
-            ),
-            "frequency": "As applicable",
-            "status": "Review activity",
-            "evidence": (
-                "Licence or written determination"
-            ),
-        },
-
-        {
-            "item": "Accounting records",
-            "frequency": "Ongoing",
-            "status": "Set up",
-            "evidence": "Accounting system",
-        },
-
-        {
-            "item": "Contract and IP records",
-            "frequency": "Ongoing",
-            "status": "Set up",
-            "evidence": "Contract/IP register",
-        },
-
-        {
-            "item": (
-                "Data protection / "
-                "privacy obligations"
-            ),
-            "frequency": "Ongoing",
-            "status": "Research required",
-            "evidence": (
-                "Privacy documentation / controls"
-            ),
-        },
-    ]
-
-
-# ============================================================
-# REPORT GENERATOR
-# ============================================================
-
-def render_markdown_report(
-    data: Dict[str, Any],
-    comparison: List[Dict[str, Any]],
-) -> str:
-
-    profile = build_profile(data)
-
-    roadmap = formation_roadmap(data)
-
-    checklist = compliance_checklist(data)
-
-    lines = [
-
-        "# PieroloOS Client Business Formation & Operating Report",
-
-        "",
-
-        (
-            f"**Generated:** "
-            f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
-        ),
-
-        f"**PieroloOS version:** {APP_VERSION}",
-
-        "",
-
-        "## 1. Executive Summary",
-
-        "",
-
-        (
-            f"**Client:** "
-            f"{profile.get('client') or 'Not provided'}"
-        ),
-
-        (
-            f"**Business:** "
-            f"{profile.get('business') or 'Not provided'}"
-        ),
-
-        (
-            f"**Objective:** "
-            f"{profile.get('objective') or 'Not provided'}"
-        ),
-
-        "",
-
-        (
-            "This report is an initial decision-support document "
-            "generated from client-provided information and the "
-            "PieroloOS research dataset. Jurisdiction-specific "
-            "legal, tax, regulatory and payment conclusions must "
-            "be verified against current authoritative sources "
-            "and, where appropriate, qualified professionals."
-        ),
-
-        "",
-
-        "## 2. Business Profile",
-
-        "",
-    ]
-
-    for key, value in profile.items():
-
-        if value not in (
-            None,
-            "",
-            [],
-        ):
-
-            label = (
-                key
-                .replace("_", " ")
-                .title()
-            )
-
-            lines.append(
-                f"- **{label}:** {value}"
-            )
-
-    lines.extend(
-        [
-            "",
-            "## 3. Jurisdiction Lens",
-            "",
-        ]
-    )
-
-    if comparison:
-
-        for index, result in enumerate(
-            comparison,
-            start=1,
-        ):
-
-            lines.extend(
-                [
-                    f"### {index}. "
-                    f"{result['jurisdiction']}",
-
-                    (
-                        f"- Entity: "
-                        f"{result['entity']}"
-                    ),
-
-                    (
-                        f"- Internal fit score: "
-                        f"{result['score']}/100"
-                    ),
-
-                    (
-                        f"- Interpretation: "
-                        f"{result['score_label']}"
-                    ),
-
-                    (
-                        f"- Notes: "
-                        f"{result['notes']}"
-                    ),
-
-                    (
-                        "- Primary sources to verify: "
-                        + ", ".join(
-                            result["sources"]
-                        )
-                    ),
-
-                    "",
-                ]
-            )
+                url("{BACKGROUND_URI}");
+        """
 
     else:
 
-        lines.append(
-            "No jurisdictions selected."
-        )
+        background_rule = """
+            background:
+                radial-gradient(
+                    circle at 70% 15%,
+                    rgba(113, 60, 180, 0.30),
+                    transparent 30%
+                ),
+                linear-gradient(
+                    135deg,
+                    #050512 0%,
+                    #100a25 50%,
+                    #050512 100%
+                );
+        """
 
-    lines.extend(
-        [
-            "## 4. Formation Roadmap",
-            "",
-        ]
+    hero_background = (
+        f'url("{BACKGROUND_URI}")'
+        if BACKGROUND_URI
+        else "none"
     )
-
-    for item in roadmap:
-
-        lines.append(
-            f"- {item}"
-        )
-
-    lines.extend(
-        [
-            "",
-            "## 5. Compliance Checklist",
-            "",
-        ]
-    )
-
-    for item in checklist:
-
-        lines.append(
-            f"- **{item['item']}** — "
-            f"{item['frequency']} — "
-            f"{item['status']} — "
-            f"Evidence: {item['evidence']}"
-        )
-
-    lines.extend(
-        [
-            "",
-            "## 6. Key Risks and Verification Points",
-            "",
-
-            "- Confirm the legal/tax implications of the proposed structure.",
-
-            "- Verify current government fees, filing deadlines "
-            "and registration rules.",
-
-            "- Verify payment processor eligibility and "
-            "prohibited/restricted activities.",
-
-            "- Confirm whether intended services trigger "
-            "licensing or regulated activity rules.",
-
-            "- Establish written IP/confidentiality arrangements "
-            "before contractor development.",
-
-            "- Keep company and personal finances appropriately separated.",
-
-            "",
-            "## 7. Next Actions",
-            "",
-
-            "1. Verify jurisdiction data against current primary sources.",
-
-            "2. Confirm the proposed entity and operating structure "
-            "with the appropriate professional.",
-
-            "3. Confirm payment/banking requirements.",
-
-            "4. Establish company records, accounting and "
-            "compliance calendar.",
-
-            "5. Approve the final formation roadmap.",
-
-            "",
-            "---",
-            "",
-
-            "**PieroloOS:** Operating intelligence and "
-            "decision-support layer for PieroloCorp International LLC.",
-        ]
-    )
-
-    return "\n".join(lines)
-
-
-# ============================================================
-# UX/UI THEME
-# ============================================================
-
-def inject_theme() -> None:
-
-    bg = BG_URI
 
     st.markdown(
         f"""
         <style>
 
-        /* =====================================================
-           ROOT DESIGN SYSTEM
-           ===================================================== */
+        @import url(
+            'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap'
+        );
 
         :root {{
-
-            --po-navy:
-                #050817;
-
-            --po-navy-2:
-                #0b1028;
-
-            --po-navy-3:
-                #101735;
-
-            --po-purple:
-                #8b5cf6;
-
-            --po-purple-2:
-                #6d28d9;
-
-            --po-purple-soft:
-                #a855f7;
-
-            --po-gold:
-                #f4c64e;
-
-            --po-gold-light:
-                #ffe9a3;
-
-            --po-text:
-                #f7f7fb;
-
-            --po-muted:
-                #a9aec7;
-
-            --po-border:
-                rgba(139, 92, 246, .25);
-
-            --po-border-gold:
-                rgba(244, 198, 78, .35);
-
+            --navy: #050512;
+            --panel: rgba(12, 10, 31, 0.78);
+            --panel-strong: rgba(17, 12, 40, 0.92);
+            --gold: #d7b45a;
+            --gold-light: #f1d98a;
+            --violet: #9b6cff;
+            --violet-light: #c5a7ff;
+            --text: #f6f3ff;
+            --muted: #aaa3c2;
+            --border: rgba(215, 180, 90, 0.20);
         }}
 
+        html,
+        body,
+        [class*="css"] {{
+            font-family: 'Inter', sans-serif;
+        }}
 
-        /* =====================================================
-           APPLICATION BACKGROUND
-           ===================================================== */
+        .stApp {{
+            color: var(--text);
+            {background_rule}
+            background-attachment: fixed;
+            background-size: cover;
+            background-position: center;
+        }}
 
-        [data-testid="stAppViewContainer"] {{
+        .stApp::before {{
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
 
             background:
-                linear-gradient(
-                    rgba(2, 5, 18, .80),
-                    rgba(2, 5, 18, .94)
+                radial-gradient(
+                    circle at 80% 10%,
+                    rgba(155,108,255,0.10),
+                    transparent 28%
                 ),
-                url('{bg}') center top / cover fixed no-repeat;
+                radial-gradient(
+                    circle at 15% 85%,
+                    rgba(215,180,90,0.06),
+                    transparent 24%
+                );
 
-            color:
-                var(--po-text);
-
+            z-index: 0;
         }}
 
-
-        /* =====================================================
-           MAIN CONTENT
-           ===================================================== */
-
-        .main .block-container {{
-
-            max-width:
-                1500px;
-
-            padding-top:
-                1.4rem;
-
-            padding-bottom:
-                2rem;
-
+        .block-container {{
+            position: relative;
+            z-index: 1;
+            max-width: 1500px;
+            padding-top: 1.25rem;
+            padding-bottom: 3rem;
         }}
-
-
-        /* =====================================================
-           STREAMLIT HEADER
-           ===================================================== */
-
-        [data-testid="stHeader"] {{
-
-            background:
-                rgba(3, 6, 18, .78);
-
-            border-bottom:
-                1px solid
-                rgba(139, 92, 246, .20);
-
-        }}
-
-
-        /* =====================================================
-           SIDEBAR
-           ===================================================== */
 
         [data-testid="stSidebar"] {{
+            background: rgba(5, 5, 18, 0.96);
+            border-right: 1px solid var(--border);
+        }}
+
+        [data-testid="stSidebar"] > div:first-child {{
+            padding-top: 1rem;
+        }}
+
+        [data-testid="stSidebar"] .stRadio label {{
+            color: #ddd6f7 !important;
+            font-weight: 600;
+        }}
+
+        [data-testid="stSidebar"]
+        .stRadio
+        div[role="radiogroup"] {{
+            gap: 0.25rem;
+        }}
+
+        h1,
+        h2,
+        h3,
+        h4 {{
+            font-family: 'Space Grotesk', sans-serif;
+            letter-spacing: -0.02em;
+        }}
+
+        h1 {{
+            color: var(--gold-light);
+        }}
+
+        h2,
+        h3 {{
+            color: #f4edff;
+        }}
+
+        p,
+        li {{
+            color: #d2cce3;
+        }}
+
+        .hero {{
+            position: relative;
+            overflow: hidden;
+
+            border: 1px solid var(--border);
+            border-radius: 24px;
+
+            padding: 2.25rem;
+            min-height: 290px;
+
+            margin-bottom: 1.25rem;
 
             background:
                 linear-gradient(
-                    180deg,
-                    rgba(8, 12, 36, .99),
-                    rgba(3, 6, 22, .99)
-                );
-
-            border-right:
-                1px solid
-                rgba(139, 92, 246, .25);
-
-        }}
-
-
-        [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {{
-
-            gap:
-                .35rem;
-
-        }}
-
-
-        /* =====================================================
-           BRAND
-           ===================================================== */
-
-        .po-brand {{
-
-            padding:
-                .5rem
-                .25rem
-                1rem;
-
-            text-align:
-                center;
-
-            border-bottom:
-                1px solid
-                rgba(139, 92, 246, .24);
-
-            margin-bottom:
-                .75rem;
-
-        }}
-
-
-        .po-brand img {{
-
-            max-width:
-                90%;
-
-            width:
-                185px;
-
-            filter:
-                drop-shadow(
-                    0 0 16px
-                    rgba(139, 92, 246, .38)
-                );
-
-        }}
-
-
-        /* =====================================================
-           TYPOGRAPHY
-           ===================================================== */
-
-        .po-kicker {{
-
-            color:
-                var(--po-gold);
-
-            font-size:
-                .72rem;
-
-            letter-spacing:
-                .28em;
-
-            text-transform:
-                uppercase;
-
-            font-weight:
-                750;
-
-        }}
-
-
-        .po-section-title {{
-
-            color:
-                #ffffff;
-
-            font-size:
-                1.45rem;
-
-            font-weight:
-                800;
-
-            margin-top:
-                1.2rem;
-
-            margin-bottom:
-                .15rem;
-
-        }}
-
-
-        .po-section-sub {{
-
-            color:
-                var(--po-muted);
-
-            font-size:
-                .92rem;
-
-            margin-bottom:
-                1rem;
-
-        }}
-
-
-        /* =====================================================
-           HERO
-           ===================================================== */
-
-        .po-hero {{
-
-            position:
-                relative;
-
-            overflow:
-                hidden;
-
-            border:
-                1px solid
-                var(--po-border);
-
-            border-radius:
-                24px;
-
-            padding:
-                2.5rem;
-
-            margin:
-                .2rem
-                0
-                1.4rem;
-
-            min-height:
-                365px;
-
-            background:
-                linear-gradient(
-                    90deg,
-                    rgba(4, 7, 22, .97) 0%,
-                    rgba(4, 7, 22, .84) 40%,
-                    rgba(4, 7, 22, .45) 75%,
-                    rgba(4, 7, 22, .25) 100%
+                    135deg,
+                    rgba(7,6,21,.90),
+                    rgba(27,13,55,.70)
                 ),
-                url('{bg}') center / cover no-repeat;
+                {hero_background};
+
+            background-size: cover;
+            background-position: center;
 
             box-shadow:
-                0 28px 90px
-                rgba(0, 0, 0, .38);
-
+                0 20px 70px rgba(0,0,0,.35);
         }}
 
+        .hero::after {{
+            content: "";
 
-        .po-hero::after {{
+            position: absolute;
 
-            content:
-                "";
+            width: 280px;
+            height: 280px;
 
-            position:
-                absolute;
+            right: -90px;
+            top: -90px;
 
-            inset:
-                0;
+            border:
+                1px solid
+                rgba(215,180,90,.28);
 
-            pointer-events:
-                none;
+            border-radius: 50%;
 
-            background:
-                linear-gradient(
-                    135deg,
-                    rgba(139, 92, 246, .08),
-                    transparent 40%,
-                    rgba(244, 198, 78, .05)
-                );
-
+            box-shadow:
+                0 0 70px
+                rgba(155,108,255,.18);
         }}
 
+        .eyebrow {{
+            color: var(--gold);
 
-        .po-hero-content {{
+            text-transform: uppercase;
 
-            position:
-                relative;
+            letter-spacing: .18em;
 
-            z-index:
-                2;
+            font-size: .74rem;
 
+            font-weight: 800;
+
+            margin-bottom: .6rem;
         }}
 
-
-        .po-hero h1 {{
-
-            font-family:
-                Georgia,
-                "Times New Roman",
-                serif;
+        .hero-title {{
+            font-family: 'Space Grotesk', sans-serif;
 
             font-size:
-                clamp(
-                    3rem,
-                    7vw,
-                    5.8rem
-                );
+                clamp(2rem, 5vw, 4.4rem);
 
-            line-height:
-                .92;
+            line-height: .98;
 
-            margin:
-                .35rem
-                0
-                .8rem;
+            font-weight: 800;
 
-            color:
-                #ffffff;
+            color: #fff;
 
-            letter-spacing:
-                -.045em;
+            max-width: 820px;
 
-            text-shadow:
-                0 5px 30px
-                rgba(0, 0, 0, .4);
-
+            margin-bottom: 1rem;
         }}
 
-
-        .po-hero .tagline {{
-
-            color:
-                var(--po-gold);
-
-            font-size:
-                1.22rem;
-
-            font-weight:
-                750;
-
-            max-width:
-                650px;
-
-            line-height:
-                1.4;
-
+        .hero-title span {{
+            color: var(--gold-light);
         }}
 
+        .hero-copy {{
+            max-width: 760px;
 
-        .po-hero .copy {{
+            color: #c5bddb;
 
-            color:
-                #c8cce0;
+            font-size: 1.02rem;
 
-            max-width:
-                680px;
-
-            line-height:
-                1.7;
-
-            margin-top:
-                .8rem;
-
-            font-size:
-                .98rem;
-
+            line-height: 1.65;
         }}
 
+        .metric-card {{
+            background: var(--panel);
 
-        .po-rule {{
+            border:
+                1px solid
+                rgba(215,180,90,.16);
 
-            height:
-                1px;
+            border-radius: 18px;
 
-            max-width:
-                620px;
+            padding: 1.1rem 1.2rem;
 
-            background:
-                linear-gradient(
-                    90deg,
-                    transparent,
-                    var(--po-gold),
-                    transparent
-                );
+            min-height: 112px;
 
-            margin:
-                1.35rem
-                0;
-
-            opacity:
-                .65;
-
+            box-shadow:
+                0 12px 35px
+                rgba(0,0,0,.20);
         }}
 
+        .metric-label {{
+            color: var(--muted);
 
-        /* =====================================================
-           KPI CARDS
-           ===================================================== */
+            font-size: .78rem;
 
-        div[data-testid="stMetric"] {{
+            text-transform: uppercase;
 
+            letter-spacing: .08em;
+
+            font-weight: 700;
+        }}
+
+        .metric-value {{
+            color: var(--gold-light);
+
+            font-family: 'Space Grotesk', sans-serif;
+
+            font-size: 2rem;
+
+            font-weight: 800;
+
+            margin-top: .35rem;
+        }}
+
+        .section-card {{
+            background: var(--panel);
+
+            border:
+                1px solid
+                rgba(155,108,255,.17);
+
+            border-radius: 20px;
+
+            padding: 1.25rem;
+
+            margin-bottom: 1rem;
+
+            box-shadow:
+                0 12px 40px
+                rgba(0,0,0,.18);
+        }}
+
+        .quick-card {{
             background:
                 linear-gradient(
                     145deg,
-                    rgba(20, 25, 55, .86),
-                    rgba(8, 12, 31, .92)
+                    rgba(16,12,36,.92),
+                    rgba(28,17,57,.76)
                 );
 
             border:
                 1px solid
-                rgba(139, 92, 246, .22);
+                rgba(215,180,90,.16);
 
-            border-radius:
-                18px;
+            border-radius: 18px;
 
-            padding:
-                1rem;
+            padding: 1.25rem;
 
-            min-height:
-                115px;
-
-            box-shadow:
-                0 16px 45px
-                rgba(0, 0, 0, .18);
-
+            min-height: 150px;
         }}
 
+        .quick-icon {{
+            color: var(--gold);
 
-        div[data-testid="stMetric"] label {{
-
-            color:
-                #aeb3ca;
-
+            font-size: 1.6rem;
         }}
 
+        .quick-title {{
+            color: #fff;
 
-        div[data-testid="stMetricValue"] {{
+            font-weight: 800;
 
-            color:
-                #ffffff;
+            font-size: 1.05rem;
 
+            margin: .45rem 0;
         }}
 
+        .quick-copy {{
+            color: var(--muted);
 
-        /* =====================================================
-           MODULE CARDS
-           ===================================================== */
+            font-size: .88rem;
 
-        .po-card {{
+            line-height: 1.5;
+        }}
+
+        .status-pill {{
+            display: inline-block;
+
+            padding: .28rem .65rem;
+
+            border-radius: 999px;
 
             background:
-                linear-gradient(
-                    145deg,
-                    rgba(20, 25, 55, .86),
-                    rgba(8, 12, 31, .92)
-                );
+                rgba(155,108,255,.13);
 
             border:
                 1px solid
-                rgba(139, 92, 246, .22);
+                rgba(155,108,255,.25);
 
-            border-radius:
-                18px;
+            color: var(--violet-light);
+
+            font-size: .74rem;
+
+            font-weight: 800;
+        }}
+
+        .footer {{
+            margin-top: 3rem;
 
             padding:
-                1.25rem;
-
-            min-height:
-                150px;
-
-            box-shadow:
-                0 14px 40px
-                rgba(0, 0, 0, .18);
-
-            transition:
-                transform .2s ease,
-                border-color .2s ease,
-                box-shadow .2s ease;
-
-        }}
-
-
-        .po-card:hover {{
-
-            transform:
-                translateY(-3px);
-
-            border-color:
-                rgba(244, 198, 78, .45);
-
-            box-shadow:
-                0 20px 55px
-                rgba(80, 45, 150, .18);
-
-        }}
-
-
-        .po-card .icon {{
-
-            font-size:
-                1.7rem;
-
-            margin-bottom:
-                .5rem;
-
-        }}
-
-
-        .po-card .title {{
-
-            color:
-                #ffffff;
-
-            font-weight:
-                800;
-
-            font-size:
-                1rem;
-
-        }}
-
-
-        .po-card .desc {{
-
-            color:
-                var(--po-muted);
-
-            font-size:
-                .84rem;
-
-            line-height:
-                1.45;
-
-            margin-top:
-                .35rem;
-
-        }}
-
-
-        /* =====================================================
-           BUTTONS
-           ===================================================== */
-
-        .stButton > button,
-        .stDownloadButton > button {{
-
-            border-radius:
-                12px !important;
-
-            border:
-                1px solid
-                rgba(139, 92, 246, .45) !important;
-
-            background:
-                rgba(18, 22, 52, .90) !important;
-
-            color:
-                #ffffff !important;
-
-            min-height:
-                2.65rem;
-
-            font-weight:
-                700 !important;
-
-            transition:
-                all .2s ease;
-
-        }}
-
-
-        .stButton > button:hover,
-        .stDownloadButton > button:hover {{
-
-            border-color:
-                var(--po-gold) !important;
-
-            box-shadow:
-                0 0 22px
-                rgba(139, 92, 246, .20);
-
-            transform:
-                translateY(-1px);
-
-        }}
-
-
-        .stButton > button[kind="primary"] {{
-
-            background:
-                linear-gradient(
-                    135deg,
-                    #f7d15b,
-                    #d99a1e
-                ) !important;
-
-            color:
-                #090b18 !important;
-
-            border-color:
-                #f7d15b !important;
-
-        }}
-
-
-        /* =====================================================
-           FORM CONTROLS
-           ===================================================== */
-
-        [data-testid="stTextInput"] input,
-        [data-testid="stTextArea"] textarea {{
-
-            background:
-                rgba(9, 13, 33, .82) !important;
-
-            color:
-                #ffffff !important;
-
-            border-color:
-                rgba(139, 92, 246, .30) !important;
-
-            border-radius:
-                10px !important;
-
-        }}
-
-
-        /* =====================================================
-           EXPANDERS
-           ===================================================== */
-
-        [data-testid="stExpander"] {{
-
-            background:
-                rgba(10, 15, 36, .72);
-
-            border:
-                1px solid
-                rgba(139, 92, 246, .20);
-
-            border-radius:
-                14px;
-
-        }}
-
-
-        /* =====================================================
-           ALERTS
-           ===================================================== */
-
-        [data-testid="stAlert"] {{
-
-            border-radius:
-                14px;
-
-        }}
-
-
-        /* =====================================================
-           FOOTER
-           ===================================================== */
-
-        .po-footer {{
-
-            margin-top:
-                2.5rem;
-
-            padding:
-                1.3rem
-                0
-                .5rem;
+                1.5rem 0 .5rem;
 
             border-top:
                 1px solid
-                rgba(139, 92, 246, .18);
+                rgba(215,180,90,.12);
 
-            color:
-                #9da2bd;
+            color: #817a99;
 
-            font-size:
-                .82rem;
+            font-size: .78rem;
 
+            text-align: center;
         }}
 
+        .small-note {{
+            color: #928ba8;
 
-        .po-footer-right {{
+            font-size: .78rem;
 
-            float:
-                right;
-
-            color:
-                #b7bad0;
-
+            line-height: 1.5;
         }}
 
+        div[data-testid="stButton"] > button {{
+            border:
+                1px solid
+                rgba(215,180,90,.24);
 
-        /* =====================================================
-           MOBILE / TABLET
-           ===================================================== */
+            border-radius: 12px;
+
+            background:
+                rgba(18,13,40,.82);
+
+            color: #f2eaff;
+
+            font-weight: 700;
+        }}
+
+        div[data-testid="stButton"] > button:hover {{
+            border-color:
+                rgba(215,180,90,.65);
+
+            color: var(--gold-light);
+        }}
+
+        div[data-testid="stFormSubmitButton"] > button {{
+            border-radius: 12px;
+
+            font-weight: 800;
+        }}
+
+        [data-testid="stDataFrame"] {{
+            border:
+                1px solid
+                rgba(215,180,90,.12);
+
+            border-radius: 14px;
+        }}
+
+        .stTextInput input,
+        .stTextArea textarea,
+        .stSelectbox div[data-baseweb="select"],
+        .stNumberInput input {{
+            border-radius: 10px;
+        }}
 
         @media (max-width: 768px) {{
 
-            .main .block-container {{
-
-                padding-left:
-                    .8rem;
-
-                padding-right:
-                    .8rem;
-
-                padding-top:
-                    .8rem;
-
+            .block-container {{
+                padding-left: 1rem;
+                padding-right: 1rem;
             }}
 
+            .hero {{
+                padding: 1.4rem;
 
-            .po-hero {{
+                min-height: 250px;
 
-                padding:
-                    1.45rem;
-
-                min-height:
-                    330px;
-
-                border-radius:
-                    18px;
-
+                border-radius: 18px;
             }}
 
-
-            .po-hero h1 {{
-
-                font-size:
-                    3rem;
-
+            .hero-title {{
+                font-size: 2.2rem;
             }}
-
-
-            .po-hero .tagline {{
-
-                font-size:
-                    1rem;
-
-            }}
-
-
-            .po-hero .copy {{
-
-                font-size:
-                    .88rem;
-
-            }}
-
-
-            .po-card {{
-
-                min-height:
-                    120px;
-
-            }}
-
-
-            .po-footer-right {{
-
-                float:
-                    none;
-
-                display:
-                    block;
-
-                margin-top:
-                    .6rem;
-
-            }}
-
         }}
 
         </style>
@@ -1804,355 +753,416 @@ def inject_theme() -> None:
     )
 
 
-inject_theme()
+inject_css()
 
 
 # ============================================================
-# SESSION STATE
+# 7. UI HELPERS
 # ============================================================
 
-if "intake" not in st.session_state:
-    st.session_state.intake = {}
+def page_header(
+    title: str,
+    subtitle: str = "",
+) -> None:
 
-if "comparison" not in st.session_state:
-    st.session_state.comparison = []
+    st.markdown(
+        f"## {html.escape(title)}"
+    )
 
-if "report" not in st.session_state:
-    st.session_state.report = ""
+    if subtitle:
 
-if "current_engagement_id" not in st.session_state:
-    st.session_state.current_engagement_id = None
+        st.markdown(
+            f"""
+            <p class="small-note">
+                {html.escape(subtitle)}
+            </p>
+            """,
+            unsafe_allow_html=True,
+        )
 
-if "nav_page" not in st.session_state:
-    st.session_state.nav_page = "Command Center"
+
+def metric_card(
+    label: str,
+    value: str | int,
+) -> None:
+
+    st.markdown(
+        f"""
+        <div class="metric-card">
+
+            <div class="metric-label">
+                {html.escape(label)}
+            </div>
+
+            <div class="metric-value">
+                {html.escape(str(value))}
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def section_start(
+    title: str,
+    description: str = "",
+) -> None:
+
+    st.markdown(
+        '<div class="section-card">',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"### {html.escape(title)}"
+    )
+
+    if description:
+
+        st.markdown(
+            f"""
+            <div class="small-note">
+                {html.escape(description)}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def section_end() -> None:
+
+    st.markdown(
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def now_text() -> str:
+    return datetime.now().strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+
+def safe_filename(value: str) -> str:
+
+    cleaned = "".join(
+        character
+        if character.isalnum()
+        or character in "-_"
+        else "_"
+        for character in value
+    )
+
+    return cleaned.strip("_") or "report"
 
 
 # ============================================================
-# NAVIGATION
-# ============================================================
-
-PAGES = [
-    "Command Center",
-    "Client Intake",
-    "Business Profile",
-    "Jurisdiction Lens",
-    "Formation Roadmap",
-    "Compliance",
-    "Report Generator",
-    "Engagement Records",
-]
-
-
-def go_to(page: str) -> None:
-    """
-    Dashboard quick-access callback.
-    """
-
-    st.session_state.nav_page = page
-
-
-# ============================================================
-# SIDEBAR
+# 8. SIDEBAR / NAVIGATION
 # ============================================================
 
 with st.sidebar:
 
-    # --------------------------------------------------------
-    # BRAND
-    # --------------------------------------------------------
-
-    if LOGO_PATH.exists():
-
-        st.markdown(
-            '<div class="po-brand">',
-            unsafe_allow_html=True,
-        )
+    if logo_ok:
 
         st.image(
             str(LOGO_PATH),
             width=185,
         )
 
-        st.markdown(
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
     else:
 
         st.markdown(
             """
-            <div class="po-brand">
-                <div class="po-kicker">
-                    PIEROLO
+            <div style="padding:10px 0 18px;">
+
+                <div style="
+                    color:#d7b45a;
+                    font-size:1.35rem;
+                    font-weight:800;
+                ">
+                    PIEROLOOS
                 </div>
-                <h2 style="color:white;">
-                    PieroloOS
-                </h2>
+
+                <div style="
+                    color:#8f86a7;
+                    font-size:.72rem;
+                ">
+                    PIEROLOCORP INTERNATIONAL LLC
+                </div>
+
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    st.caption(
-        "Professional Service Operating System "
-        f"• {APP_VERSION}"
-    )
-
-    # --------------------------------------------------------
-    # NAVIGATION
-    # --------------------------------------------------------
-
-    st.session_state.nav_page = st.radio(
-        "Operating module",
-        PAGES,
-        key="navigation_radio",
-        index=PAGES.index(
-            st.session_state.nav_page
-        ),
-    )
-
-    st.divider()
-
-    # --------------------------------------------------------
-    # MVP CONTROL STATUS
-    # --------------------------------------------------------
-
-    st.caption(
-        "MVP CONTROL STATUS"
-    )
-
-    st.write(
-        "Evidence-aware: ✓"
-    )
-
-    st.write(
-        "Human approval: ✓"
-    )
-
-    st.write(
-        "SQLite records: ✓"
-    )
-
-    st.write(
-        "Responsive UI: ✓"
-    )
-
-    st.write(
-        "Authoritative-source verification: Required"
-    )
-
-    st.divider()
-
-    st.caption(
-        "On tablet/mobile, use the native "
-        "☰ Streamlit menu to open or close "
-        "the operating system navigation."
-    )
-
-
-# ============================================================
-# CURRENT PAGE
-# ============================================================
-
-page = st.session_state.nav_page
-
-
-# ============================================================
-# COMMAND CENTER
-# ============================================================
-
-if page == "Command Center":
-
-    # --------------------------------------------------------
-    # HERO
-    # --------------------------------------------------------
-
     st.markdown(
         """
-        <section class="po-hero">
-
-            <div class="po-hero-content">
-
-                <div class="po-kicker">
-                    Welcome to
-                </div>
-
-                <h1>
-                    PieroloOS
-                </h1>
-
-                <div class="tagline">
-                    Turn Global Opportunity into Real
-                    Business Structures.
-                </div>
-
-                <div class="copy">
-                    Your operating system for business
-                    formation, jurisdiction intelligence,
-                    compliance planning and global expansion.
-                </div>
-
-                <div class="po-rule"></div>
-
-                <div class="po-kicker">
-                    FORMATION
-                    &nbsp; | &nbsp;
-                    COMPLIANCE
-                    &nbsp; | &nbsp;
-                    INTELLIGENCE
-                    &nbsp; | &nbsp;
-                    EXECUTION
-                </div>
-
-            </div>
-
-        </section>
+        <div class="status-pill">
+            PROFESSIONAL SERVICE OS · v0.1
+        </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # --------------------------------------------------------
-    # DASHBOARD DATA
-    # --------------------------------------------------------
+    st.markdown("---")
 
-    rows = load_engagements()
+    nav_options = [
+        "Command Center",
+        "Client Intake",
+        "Business Profile",
+        "Jurisdiction Lens",
+        "Formation Roadmap",
+        "Compliance",
+        "Report Generator",
+        "Engagement Records",
+    ]
 
-    active_count = sum(
-        1
-        for row in rows
-        if row["status"] != "Closed"
+    page = st.radio(
+        "Navigation",
+        nav_options,
+        label_visibility="collapsed",
     )
 
-    total_reports = report_count()
-
-    # --------------------------------------------------------
-    # KPI
-    # --------------------------------------------------------
+    st.markdown("---")
 
     st.markdown(
-        '<div class="po-section-title">'
-        'Operating Overview'
-        '</div>',
+        """
+        <div class="small-note">
+
+        <b>Operating principle</b><br>
+
+        Prepare → Analyse → Decide → Execute
+        → Record → Improve
+
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
+    with st.expander("System Status"):
+
+        st.write(
+            f"Background: "
+            f"{'✓ Found' if background_ok else '✗ Missing'}"
+        )
+
+        st.write(
+            f"Logo: "
+            f"{'✓ Found' if logo_ok else '✗ Missing'}"
+        )
+
+        st.write(
+            "Database: ✓ Ready"
+        )
+
+        if LOGO_PATH:
+
+            st.caption(
+                f"Logo file: {LOGO_PATH.name}"
+            )
+
+    st.caption(
+        "Decision-support prototype. "
+        "Not legal, tax, accounting, or financial advice."
+    )
+
+
+# ============================================================
+# 9. COMMAND CENTER
+# ============================================================
+
+if page == "Command Center":
+
     st.markdown(
-        '<div class="po-section-sub">'
-        'A high-level view of the current engagement environment.'
-        '</div>',
+        """
+        <div class="hero">
+
+            <div class="eyebrow">
+                PieroloCorp International LLC
+            </div>
+
+            <div class="hero-title">
+                The operating system for a
+                <span>structured business.</span>
+            </div>
+
+            <div class="hero-copy">
+
+                PieroloOS brings client intake,
+                business intelligence, jurisdiction analysis,
+                formation planning, compliance tracking,
+                reporting, and engagement management
+                into one founder-operated workspace.
+
+            </div>
+
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
-    c1, c2, c3, c4 = st.columns(4)
+    cols = st.columns(4)
 
-    c1.metric(
-        "Total Engagements",
-        len(rows),
-    )
+    with cols[0]:
+        metric_card(
+            "Clients",
+            count_records("clients"),
+        )
 
-    c2.metric(
-        "Active Engagements",
-        active_count,
-    )
+    with cols[1]:
+        metric_card(
+            "Reports",
+            count_records("reports"),
+        )
 
-    c3.metric(
-        "Reports Generated",
-        total_reports,
-    )
+    with cols[2]:
+        metric_card(
+            "Engagements",
+            count_records("engagements"),
+        )
 
-    c4.metric(
-        "Jurisdictions Available",
-        len(JURISDICTIONS),
-    )
+    with cols[3]:
+        metric_card(
+            "Jurisdictions",
+            len(JURISDICTIONS),
+        )
 
-    # --------------------------------------------------------
-    # QUICK ACCESS
-    # --------------------------------------------------------
+    st.markdown("### Quick Access")
 
-    st.markdown(
-        '<div class="po-section-title">'
-        'Quick Access'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    qcols = st.columns(4)
 
-    st.markdown(
-        '<div class="po-section-sub">'
-        'Move from idea to execution — all in one place.'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    cards = [
-
+    quick_items = [
         (
-            "👤",
+            "01",
             "Client Intake",
-            "Capture client requirements.",
-            "Client Intake",
+            "Capture and structure a new client engagement.",
         ),
-
         (
-            "▣",
-            "Business Profile",
-            "Structure business information.",
-            "Business Profile",
-        ),
-
-        (
-            "◎",
+            "02",
             "Jurisdiction Lens",
-            "Compare and analyse jurisdictions.",
-            "Jurisdiction Lens",
+            "Compare jurisdictions against business criteria.",
         ),
-
         (
-            "☷",
+            "03",
             "Formation Roadmap",
-            "Plan implementation steps.",
-            "Formation Roadmap",
+            "Turn a business objective into an execution sequence.",
         ),
-
         (
-            "◈",
-            "Compliance",
-            "Track obligations.",
-            "Compliance",
-        ),
-
-        (
-            "▤",
+            "04",
             "Report Generator",
-            "Create professional reports.",
-            "Report Generator",
+            "Convert structured information into a client-ready report.",
         ),
     ]
 
-    cols = st.columns(3)
+    for column, item in zip(
+        qcols,
+        quick_items,
+    ):
 
-    for index, (
-        icon,
-        title,
-        description,
-        target,
-    ) in enumerate(cards):
+        number, title, copy = item
 
-        with cols[index % 3]:
+        with column:
 
             st.markdown(
                 f"""
-                <div class="po-card">
+                <div class="quick-card">
 
-                    <div class="icon">
-                        {icon}
+                    <div class="quick-icon">
+                        {number}
                     </div>
 
-                    <div class="title">
+                    <div class="quick-title">
                         {title}
                     </div>
 
-                    <div class="desc">
+                    <div class="quick-copy">
+                        {copy}
+                    </div>
+
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("### Operating Model")
+
+    section_start(
+        "PieroloOS Workflow",
+        "The MVP is structured around a repeatable professional-service operating loop.",
+    )
+
+    workflow = [
+        (
+            "01",
+            "Intake",
+            "Capture the client's objective and facts.",
+        ),
+        (
+            "02",
+            "Classify",
+            "Structure the business and service requirement.",
+        ),
+        (
+            "03",
+            "Assess",
+            "Compare jurisdictions, risks, and requirements.",
+        ),
+        (
+            "04",
+            "Plan",
+            "Generate a practical formation and compliance roadmap.",
+        ),
+        (
+            "05",
+            "Approve",
+            "Identify decisions requiring client or professional approval.",
+        ),
+        (
+            "06",
+            "Execute",
+            "Coordinate the selected actions.",
+        ),
+        (
+            "07",
+            "Record",
+            "Preserve reports, status, and engagement history.",
+        ),
+        (
+            "08",
+            "Improve",
+            "Convert recurring work into reusable systems.",
+        ),
+    ]
+
+    workflow_columns = st.columns(4)
+
+    for index, item in enumerate(workflow):
+
+        number, title, description = item
+
+        with workflow_columns[index % 4]:
+
+            st.markdown(
+                f"""
+                <div style="padding:.8rem 0 1rem;">
+
+                    <div style="
+                        color:#d7b45a;
+                        font-weight:800;
+                    ">
+                        {number}
+                    </div>
+
+                    <div style="
+                        color:#fff;
+                        font-weight:800;
+                        margin:.2rem 0;
+                    ">
+                        {title}
+                    </div>
+
+                    <div class="small-note">
                         {description}
                     </div>
 
@@ -2161,166 +1171,102 @@ if page == "Command Center":
                 unsafe_allow_html=True,
             )
 
-            st.button(
-                f"Open {title} →",
-                key=f"quick_{index}",
-                on_click=go_to,
-                args=(target,),
-            )
-
-    # --------------------------------------------------------
-    # OPERATING LOOP
-    # --------------------------------------------------------
-
-    st.markdown(
-        '<div class="po-section-title">'
-        'Operating Loop'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.info(
-        "Intake → Classify → Verify → Assess → "
-        "Plan → Approve → Execute → Verify → "
-        "Record → Close → Learn"
-    )
-
-    # --------------------------------------------------------
-    # DISCLAIMER
-    # --------------------------------------------------------
-
-    st.warning(
-        "This MVP is a workflow and decision-support "
-        "prototype. It does not replace legal, tax, "
-        "accounting, regulatory or other professional review."
-    )
+    section_end()
 
 
 # ============================================================
-# CLIENT INTAKE
+# 10. CLIENT INTAKE
 # ============================================================
 
 elif page == "Client Intake":
 
-    st.title(
-        "Client Intake"
-    )
-
-    st.caption(
-        "Structured intake → reusable business data"
+    page_header(
+        "Client Intake",
+        "Create a structured client record that can feed the remaining PieroloOS modules.",
     )
 
     with st.form(
-        "client_intake_form"
+        "client_intake_form",
+        clear_on_submit=False,
     ):
 
-        st.markdown(
-            "### Client Identity"
-        )
+        column1, column2 = st.columns(2)
 
-        client_name = st.text_input(
-            "Client / founder name",
-        )
+        with column1:
 
-        business_name = st.text_input(
-            "Proposed business name",
-        )
+            client_name = st.text_input(
+                "Client / Founder Name *"
+            )
 
-        service_type = st.selectbox(
-            "Primary service",
-            [
-                "Business formation",
-                "Business structure review",
-                "Jurisdiction comparison",
-                "Compliance setup",
-                "Business consulting",
-                "PieroloOS SaaS",
-                "Other",
-            ],
-        )
+            email = st.text_input(
+                "Email"
+            )
 
-        st.markdown(
-            "### Business Context"
-        )
+            phone = st.text_input(
+                "Phone"
+            )
 
-        objective = st.text_area(
-            "Primary business objective",
-            height=120,
+            country = st.text_input(
+                "Current Country / Residence"
+            )
+
+            business_name = st.text_input(
+                "Proposed Business Name"
+            )
+
+        with column2:
+
+            business_type = st.selectbox(
+                "Business Type",
+                [
+                    "SaaS / Technology",
+                    "Consulting / Professional Services",
+                    "E-commerce",
+                    "Import / Export",
+                    "Real Estate",
+                    "Financial / Investment",
+                    "Manufacturing",
+                    "Other",
+                ],
+            )
+
+            service = st.selectbox(
+                "Requested Service",
+                [
+                    "Business Formation",
+                    "Jurisdiction Analysis",
+                    "Compliance Support",
+                    "Business Consulting",
+                    "Corporate Structuring",
+                    "SaaS / Technology Advisory",
+                    "Other",
+                ],
+            )
+
+            status = st.selectbox(
+                "Engagement Status",
+                [
+                    "New",
+                    "Qualified",
+                    "In Progress",
+                    "Awaiting Client",
+                    "Closed",
+                ],
+            )
+
+        notes = st.text_area(
+            "Client Objective / Notes",
             placeholder=(
-                "Example: Establish a remote-first "
-                "technology company serving international "
-                "customers."
+                "Describe the business objective, target market, "
+                "constraints, and immediate requirement."
             ),
-        )
-
-        business_model = st.text_area(
-            "Business model",
-            height=100,
-            placeholder=(
-                "What will the business sell, to whom, "
-                "and how?"
-            ),
-        )
-
-        industry = st.text_input(
-            "Industry",
-        )
-
-        customer_market = st.text_input(
-            "Target customers / markets",
-        )
-
-        owner_residence = st.text_input(
-            "Owner residence / tax residence",
-        )
-
-        target_jurisdictions = st.text_input(
-            "Candidate jurisdictions",
-            placeholder=(
-                "Example: United States, "
-                "United Kingdom, Nigeria"
-            ),
-        )
-
-        st.markdown(
-            "### Operating Requirements"
-        )
-
-        capital = st.text_input(
-            "Initial capital / budget",
-        )
-
-        employees = st.number_input(
-            "Initial employees / contractors",
-            min_value=0,
-            max_value=10000,
-            value=0,
-        )
-
-        payment_needs = st.multiselect(
-            "Payment requirements",
-            [
-                "International card payments",
-                "Bank transfers",
-                "Subscription billing",
-                "Marketplace payments",
-                "Local Nigerian payments",
-                "Other",
-            ],
-        )
-
-        constraints = st.text_area(
-            "Constraints / concerns",
-            height=100,
-            placeholder=(
-                "Budget, timing, documentation, "
-                "banking, regulatory or operational concerns."
-            ),
+            height=160,
         )
 
         submitted = st.form_submit_button(
-            "Save Intake",
+            "Create Client Record",
             type="primary",
+            use_container_width=True,
         )
 
     if submitted:
@@ -2328,345 +1274,770 @@ elif page == "Client Intake":
         if not client_name.strip():
 
             st.error(
-                "Client / founder name is required."
+                "Client / Founder Name is required."
             )
 
         else:
 
-            data = {
-
-                "client_name":
+            execute_write(
+                """
+                INSERT INTO clients
+                (
+                    client_name,
+                    email,
+                    phone,
+                    country,
+                    business_name,
+                    business_type,
+                    service,
+                    status,
+                    notes,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
                     client_name.strip(),
-
-                "business_name":
+                    email.strip(),
+                    phone.strip(),
+                    country.strip(),
                     business_name.strip(),
-
-                "service_type":
-                    service_type,
-
-                "objective":
-                    objective.strip(),
-
-                "business_model":
-                    business_model.strip(),
-
-                "industry":
-                    industry.strip(),
-
-                "customer_market":
-                    customer_market.strip(),
-
-                "owner_residence":
-                    owner_residence.strip(),
-
-                "target_jurisdictions":
-                    target_jurisdictions.strip(),
-
-                "capital":
-                    capital.strip(),
-
-                "employees":
-                    employees,
-
-                "payment_needs":
-                    payment_needs,
-
-                "constraints":
-                    constraints.strip(),
-            }
-
-            engagement_id = save_engagement(
-                data
-            )
-
-            st.session_state.intake = data
-
-            st.session_state.current_engagement_id = (
-                engagement_id
+                    business_type,
+                    service,
+                    status,
+                    notes.strip(),
+                    now_text(),
+                ),
             )
 
             st.success(
-                f"Intake saved as Engagement "
-                f"#{engagement_id}."
+                "Client record created successfully."
             )
 
-            st.info(
-                "Next recommended step: "
-                "review the Business Profile."
-            )
+            st.rerun()
 
+    st.markdown("### Recent Clients")
 
-# ============================================================
-# BUSINESS PROFILE
-# ============================================================
-
-elif page == "Business Profile":
-
-    st.title(
-        "Business Profile"
+    rows = fetch_all(
+        """
+        SELECT
+            id,
+            client_name,
+            business_name,
+            service,
+            status,
+            created_at
+        FROM clients
+        ORDER BY id DESC
+        LIMIT 10
+        """
     )
 
-    st.caption(
-        "Structured representation of the client's business."
-    )
+    if rows:
 
-    data = st.session_state.intake
-
-    if not data:
-
-        st.info(
-            "Complete Client Intake first."
-        )
-
-        st.button(
-            "Go to Client Intake →",
-            on_click=go_to,
-            args=("Client Intake",),
+        st.dataframe(
+            [dict(row) for row in rows],
+            use_container_width=True,
+            hide_index=True,
         )
 
     else:
 
-        profile = build_profile(
-            data
-        )
-
-        st.markdown(
-            "### Profile Summary"
-        )
-
-        columns = st.columns(2)
-
-        profile_items = list(
-            profile.items()
-        )
-
-        for index, (
-            key,
-            value,
-        ) in enumerate(profile_items):
-
-            with columns[index % 2]:
-
-                label = (
-                    key
-                    .replace("_", " ")
-                    .title()
-                )
-
-                st.markdown(
-                    f"""
-                    <div class="po-card">
-
-                        <div class="title">
-                            {label}
-                        </div>
-
-                        <div class="desc">
-                            {value
-                             if value not in (None, "", [])
-                             else "Not provided"}
-                        </div>
-
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-        st.divider()
-
-        st.download_button(
-            "Download Business Profile JSON",
-            data=json.dumps(
-                profile,
-                indent=2,
-                ensure_ascii=False,
-            ),
-            file_name="business_profile.json",
-            mime="application/json",
+        st.info(
+            "No client records have been created yet."
         )
 
 
 # ============================================================
-# JURISDICTION LENS
+# 11. BUSINESS PROFILE
+# ============================================================
+
+elif page == "Business Profile":
+
+    page_header(
+        "Business Profile",
+        "Create a structured profile from the client's commercial, operational, and strategic context.",
+    )
+
+    clients = fetch_all(
+        """
+        SELECT
+            id,
+            client_name,
+            business_name
+        FROM clients
+        ORDER BY id DESC
+        """
+    )
+
+    if not clients:
+
+        st.info(
+            "Create a client record first in Client Intake."
+        )
+
+    else:
+
+        labels = {
+            row["id"]:
+                f"{row['client_name']}"
+                + (
+                    f" — {row['business_name']}"
+                    if row["business_name"]
+                    else ""
+                )
+            for row in clients
+        }
+
+        selected_id = st.selectbox(
+            "Select Client",
+            list(labels.keys()),
+            format_func=lambda value: labels[value],
+        )
+
+        client = fetch_one(
+            "SELECT * FROM clients WHERE id = ?",
+            (selected_id,),
+        )
+
+        if client:
+
+            section_start(
+                "Client Identity",
+                "Information currently stored in the client intake record.",
+            )
+
+            column1, column2, column3 = st.columns(3)
+
+            with column1:
+
+                st.write(
+                    "**Founder:**",
+                    client["client_name"],
+                )
+
+                st.write(
+                    "**Country:**",
+                    client["country"]
+                    or "Not specified",
+                )
+
+            with column2:
+
+                st.write(
+                    "**Business:**",
+                    client["business_name"]
+                    or "Not specified",
+                )
+
+                st.write(
+                    "**Type:**",
+                    client["business_type"],
+                )
+
+            with column3:
+
+                st.write(
+                    "**Service:**",
+                    client["service"],
+                )
+
+                st.write(
+                    "**Status:**",
+                    client["status"],
+                )
+
+            section_end()
+
+            section_start(
+                "Strategic Profile",
+                "Complete this assessment as part of the engagement analysis.",
+            )
+
+            column1, column2 = st.columns(2)
+
+            with column1:
+
+                target_market = st.text_area(
+                    "Target Market",
+                    placeholder=(
+                        "Countries, regions, customer segments, "
+                        "or industries."
+                    ),
+                    height=120,
+                )
+
+                revenue_model = st.selectbox(
+                    "Revenue Model",
+                    [
+                        "Subscription",
+                        "Professional Services",
+                        "E-commerce",
+                        "Transaction Fees",
+                        "Advertising",
+                        "Licensing",
+                        "Mixed",
+                        "Other",
+                    ],
+                )
+
+                funding_stage = st.selectbox(
+                    "Funding Stage",
+                    [
+                        "Bootstrapped",
+                        "Pre-revenue",
+                        "Revenue-generating",
+                        "Seeking external capital",
+                        "Funded",
+                    ],
+                )
+
+            with column2:
+
+                ownership = st.text_area(
+                    "Ownership / Founder Structure",
+                    placeholder=(
+                        "Founder ownership, partners, investors, "
+                        "or expected ownership."
+                    ),
+                    height=120,
+                )
+
+                expansion = st.text_area(
+                    "Expansion Objectives",
+                    placeholder=(
+                        "Markets, hiring, fundraising, banking, "
+                        "payments, IP, subsidiaries, etc."
+                    ),
+                    height=120,
+                )
+
+                key_risks = st.text_area(
+                    "Known Constraints / Risks",
+                    placeholder=(
+                        "Budget, residency, regulation, tax, "
+                        "banking, operational, or timing constraints."
+                    ),
+                    height=120,
+                )
+
+            section_end()
+
+            if st.button(
+                "Save Business Profile",
+                type="primary",
+            ):
+
+                profile_note = (
+                    f"\n\n"
+                    f"BUSINESS PROFILE — {now_text()}\n"
+                    f"Target market: {target_market}\n"
+                    f"Revenue model: {revenue_model}\n"
+                    f"Funding stage: {funding_stage}\n"
+                    f"Ownership: {ownership}\n"
+                    f"Expansion objectives: {expansion}\n"
+                    f"Known risks: {key_risks}\n"
+                )
+
+                execute_write(
+                    """
+                    UPDATE clients
+                    SET notes =
+                        COALESCE(notes, '') || ?
+                    WHERE id = ?
+                    """,
+                    (
+                        profile_note,
+                        selected_id,
+                    ),
+                )
+
+                st.success(
+                    "Business profile saved."
+                )
+
+
+# ============================================================
+# 12. JURISDICTION LENS
 # ============================================================
 
 elif page == "Jurisdiction Lens":
 
-    st.title(
-        "Jurisdiction Lens"
+    page_header(
+        "Jurisdiction Lens",
+        (
+            "A structured comparison tool. Scores are internal "
+            "decision-support indicators, not legal or tax conclusions."
+        ),
+    )
+
+    section_start(
+        "Business Requirements",
+        "Adjust the importance of each criterion for the current client.",
+    )
+
+    column1, column2, column3, column4 = st.columns(4)
+
+    with column1:
+
+        w_remote = st.slider(
+            "Remote Friendliness",
+            1,
+            5,
+            4,
+        )
+
+        w_international = st.slider(
+            "International Fit",
+            1,
+            5,
+            4,
+        )
+
+    with column2:
+
+        w_banking = st.slider(
+            "Banking / Payments",
+            1,
+            5,
+            4,
+        )
+
+        w_privacy = st.slider(
+            "Privacy",
+            1,
+            5,
+            3,
+        )
+
+    with column3:
+
+        w_cost = st.slider(
+            "Cost Sensitivity",
+            1,
+            5,
+            3,
+        )
+
+        w_complexity = st.slider(
+            "Formation Simplicity",
+            1,
+            5,
+            3,
+        )
+
+    with column4:
+
+        w_compliance = st.slider(
+            "Compliance Simplicity",
+            1,
+            5,
+            3,
+        )
+
+    section_end()
+
+    def calculate_score(
+        jurisdiction: dict,
+    ) -> float:
+
+        positive_score = (
+            jurisdiction["remote_friendliness"]
+            * w_remote
+            +
+            jurisdiction["international_fit"]
+            * w_international
+            +
+            jurisdiction["banking_payment_fit"]
+            * w_banking
+            +
+            jurisdiction["privacy"]
+            * w_privacy
+            +
+            (6 - jurisdiction["cost"])
+            * w_cost
+            +
+            (6 - jurisdiction["formation_complexity"])
+            * w_complexity
+            +
+            (6 - jurisdiction["compliance_complexity"])
+            * w_compliance
+        )
+
+        total_weight = (
+            w_remote
+            + w_international
+            + w_banking
+            + w_privacy
+            + w_cost
+            + w_complexity
+            + w_compliance
+        )
+
+        return round(
+            positive_score / total_weight,
+            2,
+        )
+
+    results = []
+
+    for jurisdiction in JURISDICTIONS:
+
+        item = jurisdiction.copy()
+
+        item["weighted_indicator"] = (
+            calculate_score(jurisdiction)
+        )
+
+        results.append(item)
+
+    results.sort(
+        key=lambda item:
+        item["weighted_indicator"],
+        reverse=True,
+    )
+
+    st.markdown("### Comparison")
+
+    st.dataframe(
+        [
+            {
+                "Jurisdiction":
+                    result["jurisdiction"],
+
+                "Indicator":
+                    result["weighted_indicator"],
+
+                "Remote":
+                    result["remote_friendliness"],
+
+                "International":
+                    result["international_fit"],
+
+                "Banking / Payments":
+                    result["banking_payment_fit"],
+
+                "Privacy":
+                    result["privacy"],
+
+                "Cost":
+                    result["cost"],
+
+                "Formation Complexity":
+                    result["formation_complexity"],
+
+                "Compliance Complexity":
+                    result["compliance_complexity"],
+            }
+            for result in results
+        ],
+        use_container_width=True,
+        hide_index=True,
     )
 
     st.caption(
-        "Internal comparison model. Scores are not legal "
-        "recommendations and must be supported by current "
-        "research before client delivery."
+        "Higher indicator values reflect stronger alignment "
+        "with the selected internal criteria. This does not "
+        "constitute a legal, tax, banking, or regulatory recommendation."
     )
 
-    selected = st.multiselect(
-        "Select jurisdictions",
-        list(
-            JURISDICTIONS.keys()
+    st.markdown("### Jurisdiction Profiles")
+
+    for result in results:
+
+        with st.expander(
+            f"{result['jurisdiction']} "
+            f"— indicator {result['weighted_indicator']}"
+        ):
+
+            st.write(
+                result["summary"]
+            )
+
+            st.write(
+                f"**Primary source family:** "
+                f"{result['source']}"
+            )
+
+            st.write(
+                f"**Remote friendliness:** "
+                f"{result['remote_friendliness']}/5 · "
+                f"**International fit:** "
+                f"{result['international_fit']}/5 · "
+                f"**Banking/payment fit:** "
+                f"{result['banking_payment_fit']}/5"
+            )
+
+            st.write(
+                f"**Formation complexity:** "
+                f"{result['formation_complexity']}/5 · "
+                f"**Compliance complexity:** "
+                f"{result['compliance_complexity']}/5 · "
+                f"**Privacy:** "
+                f"{result['privacy']}/5"
+            )
+
+
+# ============================================================
+# 13. FORMATION ROADMAP
+# ============================================================
+
+elif page == "Formation Roadmap":
+
+    page_header(
+        "Formation Roadmap",
+        "Generate a practical sequence from business objective to operating company.",
+    )
+
+    section_start(
+        "Formation Planning Inputs",
+        (
+            "This is a planning framework. Exact legal, tax, "
+            "banking, and regulatory requirements must be verified "
+            "for the selected jurisdiction."
         ),
-        default=list(
-            JURISDICTIONS.keys()
-        )[:2],
     )
 
-    st.markdown(
-        "### Decision Priorities"
-    )
+    column1, column2 = st.columns(2)
 
-    p1, p2, p3, p4 = st.columns(4)
+    with column1:
 
-    formation = p1.slider(
-        "Formation simplicity",
-        0.0,
-        5.0,
-        3.0,
-        0.5,
-    )
+        founder_country = st.text_input(
+            "Founder Residence / Country",
+            value="Nigeria",
+        )
 
-    cost = p2.slider(
-        "Cost importance",
-        0.0,
-        5.0,
-        3.0,
-        0.5,
-    )
+        target_jurisdiction = st.selectbox(
+            "Target Jurisdiction",
+            [
+                jurisdiction["jurisdiction"]
+                for jurisdiction in JURISDICTIONS
+            ],
+        )
 
-    remote = p3.slider(
-        "Remote operation",
-        0.0,
-        5.0,
-        3.0,
-        0.5,
-    )
+        business_model = st.selectbox(
+            "Business Model",
+            [
+                "SaaS",
+                "Consulting",
+                "E-commerce",
+                "Import / Export",
+                "Real Estate",
+                "Investment",
+                "Mixed",
+            ],
+        )
 
-    international = p4.slider(
-        "International business",
-        0.0,
-        5.0,
-        4.0,
-        0.5,
-    )
+    with column2:
 
-    p5, p6, p7 = st.columns(3)
+        banking_needed = st.checkbox(
+            "Business banking required",
+            True,
+        )
 
-    payments = p5.slider(
-        "Banking/payment fit",
-        0.0,
-        5.0,
-        4.0,
-        0.5,
-    )
+        payment_gateway = st.checkbox(
+            "International payment gateway required",
+            True,
+        )
 
-    compliance = p6.slider(
-        "Lower compliance burden",
-        0.0,
-        5.0,
-        3.0,
-        0.5,
-    )
+        contractors = st.checkbox(
+            "International contractors expected",
+            False,
+        )
 
-    privacy = p7.slider(
-        "Privacy importance",
-        0.0,
-        5.0,
-        2.0,
-        0.5,
-    )
+        fundraising = st.checkbox(
+            "External fundraising expected",
+            False,
+        )
+
+        ip_protection = st.checkbox(
+            "Formal IP protection / ownership required",
+            True,
+        )
+
+    section_end()
 
     if st.button(
-        "Run Jurisdiction Lens",
+        "Generate Formation Roadmap",
         type="primary",
     ):
 
-        priorities = {
+        steps = [
+            (
+                "01",
+                "Define entity purpose",
+                (
+                    "Document business model, target customers, "
+                    "ownership, and intended activities."
+                ),
+            ),
+            (
+                "02",
+                "Validate jurisdiction",
+                (
+                    f"Verify the suitability of "
+                    f"{target_jurisdiction} against current legal, "
+                    "tax, banking, and operational requirements."
+                ),
+            ),
+            (
+                "03",
+                "Prepare formation information",
+                (
+                    "Collect founder identity information, "
+                    "registered-agent details where applicable, "
+                    "ownership information, and company purpose."
+                ),
+            ),
+            (
+                "04",
+                "Form the entity",
+                (
+                    "Complete the applicable company registration "
+                    "process and retain official formation records."
+                ),
+            ),
+            (
+                "05",
+                "Establish governance records",
+                (
+                    "Maintain operating agreement, resolutions, "
+                    "ownership records, and other core corporate "
+                    "documents as applicable."
+                ),
+            ),
+            (
+                "06",
+                "Tax / identification setup",
+                (
+                    "Determine and obtain applicable tax "
+                    "identification and registrations."
+                ),
+            ),
+            (
+                "07",
+                "Banking and payments",
+                (
+                    "Apply for business banking and payment "
+                    "infrastructure, subject to provider eligibility "
+                    "and compliance review."
+                ),
+            ),
+            (
+                "08",
+                "Operational infrastructure",
+                (
+                    "Set up accounting, contracts, invoicing, "
+                    "document storage, security, and internal controls."
+                ),
+            ),
+            (
+                "09",
+                "Compliance calendar",
+                (
+                    "Create recurring filing, tax, reporting, "
+                    "licence, and registered-agent obligations."
+                ),
+            ),
+            (
+                "10",
+                "Launch and monitor",
+                (
+                    "Begin operations and continuously monitor "
+                    "corporate, financial, commercial, and "
+                    "compliance state."
+                ),
+            ),
+        ]
 
-            "formation":
-                formation,
+        if contractors:
 
-            "cost":
-                cost,
-
-            "remote":
-                remote,
-
-            "international":
-                international,
-
-            "payments":
-                payments,
-
-            "compliance":
-                compliance,
-
-            "privacy":
-                privacy,
-        }
-
-        st.session_state.comparison = (
-            compare_jurisdictions(
-                selected,
-                priorities,
+            steps.insert(
+                8,
+                (
+                    "09A",
+                    "Contractor framework",
+                    (
+                        "Create contractor agreements, onboarding "
+                        "controls, IP assignment terms, confidentiality "
+                        "provisions, and payment processes as appropriate."
+                    ),
+                ),
             )
-        )
 
-    if st.session_state.comparison:
+        if fundraising:
+
+            steps.insert(
+                9,
+                (
+                    "09B",
+                    "Capital-readiness",
+                    (
+                        "Organise cap table, financial records, "
+                        "governance documents, IP ownership, and "
+                        "investor materials."
+                    ),
+                ),
+            )
+
+        if ip_protection:
+
+            steps.insert(
+                8,
+                (
+                    "08A",
+                    "IP ownership",
+                    (
+                        "Confirm that software, branding, documentation, "
+                        "designs, and contractor-created work are properly "
+                        "owned or licensed by the company."
+                    ),
+                ),
+            )
 
         st.markdown(
-            "### Comparison Results"
+            "### Recommended Planning Sequence"
         )
 
-        for item in st.session_state.comparison:
+        for number, title, description in steps:
 
             st.markdown(
                 f"""
-                <div class="po-card">
+                <div class="section-card">
 
-                    <div class="po-kicker">
-                        Jurisdiction
-                    </div>
+                    <div style="
+                        display:flex;
+                        gap:16px;
+                        align-items:flex-start;
+                    ">
 
-                    <div class="title"
-                         style="font-size:1.2rem;">
-                        {item['jurisdiction']}
-                    </div>
+                        <div style="
+                            color:#d7b45a;
+                            font-size:1.3rem;
+                            font-weight:800;
+                            min-width:42px;
+                        ">
+                            {number}
+                        </div>
 
-                    <div class="desc">
+                        <div>
 
-                        <strong>
-                            Entity:
-                        </strong>
-                        {item['entity']}
+                            <div style="
+                                font-weight:800;
+                                color:#fff;
+                                font-size:1.05rem;
+                            ">
+                                {title}
+                            </div>
 
-                        <br><br>
+                            <div
+                                class="small-note"
+                                style="margin-top:.3rem;"
+                            >
+                                {description}
+                            </div>
 
-                        <strong>
-                            Internal fit score:
-                        </strong>
-                        {item['score']}/100
-
-                        <br><br>
-
-                        <strong>
-                            Interpretation:
-                        </strong>
-                        {item['score_label']}
-
-                        <br><br>
-
-                        <strong>
-                            Notes:
-                        </strong>
-                        {item['notes']}
-
-                        <br><br>
-
-                        <strong>
-                            Primary sources to verify:
-                        </strong>
-                        {", ".join(item["sources"])}
+                        </div>
 
                     </div>
 
@@ -2675,448 +2046,532 @@ elif page == "Jurisdiction Lens":
                 unsafe_allow_html=True,
             )
 
-            st.write("")
-
-        st.warning(
-            "Do not present the internal score as a "
-            "legal, tax, banking or investment conclusion. "
-            "It is an internal prioritisation mechanism."
-        )
-
 
 # ============================================================
-# FORMATION ROADMAP
-# ============================================================
-
-elif page == "Formation Roadmap":
-
-    st.title(
-        "Formation Roadmap"
-    )
-
-    st.caption(
-        "Convert the proposed structure into an actionable "
-        "implementation sequence."
-    )
-
-    if not st.session_state.intake:
-
-        st.info(
-            "Complete Client Intake first."
-        )
-
-        st.button(
-            "Go to Client Intake →",
-            on_click=go_to,
-            args=("Client Intake",),
-        )
-
-    else:
-
-        steps = formation_roadmap(
-            st.session_state.intake
-        )
-
-        st.markdown(
-            "### Implementation Sequence"
-        )
-
-        for index, step in enumerate(
-            steps
-        ):
-
-            st.checkbox(
-                step,
-                key=f"roadmap_{index}",
-            )
-
-        st.divider()
-
-        roadmap_text = "\n".join(
-            f"- {item}"
-            for item in steps
-        )
-
-        st.download_button(
-            "Download Formation Roadmap",
-            data=roadmap_text,
-            file_name="formation_roadmap.txt",
-            mime="text/plain",
-        )
-
-
-# ============================================================
-# COMPLIANCE
+# 14. COMPLIANCE
 # ============================================================
 
 elif page == "Compliance":
 
-    st.title(
-        "Compliance Checklist"
+    page_header(
+        "Compliance Checklist",
+        "Track recurring operational and corporate obligations at a high level.",
     )
 
-    st.caption(
-        "Checklist generation is not proof of compliance. "
-        "Each requirement must be verified for the actual "
-        "entity, jurisdiction and activity."
+    jurisdiction = st.selectbox(
+        "Operating / Formation Jurisdiction",
+        [
+            item["jurisdiction"]
+            for item in JURISDICTIONS
+        ],
     )
 
-    if not st.session_state.intake:
+    checklist = [
+        "Maintain formation and governance records",
+        "Maintain registered agent / official address requirements where applicable",
+        "Track annual reports / periodic company filings",
+        "Track federal, state, or local tax obligations",
+        "Maintain accounting and financial records",
+        "Reconcile business bank accounts",
+        "Review payment-provider compliance requirements",
+        "Maintain client contracts and engagement records",
+        "Maintain contractor agreements and IP provisions",
+        "Review licences / permits relevant to business activity",
+        "Review data protection and privacy obligations",
+        "Review cybersecurity and access controls",
+        "Review beneficial ownership / reporting requirements where applicable",
+        "Maintain business continuity and document backups",
+    ]
 
-        st.info(
-            "Complete Client Intake first."
-        )
+    st.markdown(
+        f"### Checklist — {jurisdiction}"
+    )
 
-        st.button(
-            "Go to Client Intake →",
-            on_click=go_to,
-            args=("Client Intake",),
-        )
+    completed = []
 
-    else:
+    for index, item in enumerate(checklist):
 
-        checklist = compliance_checklist(
-            st.session_state.intake
-        )
-
-        reviewed_count = 0
-
-        for index, item in enumerate(
-            checklist
+        if st.checkbox(
+            item,
+            key=f"compliance_{index}",
         ):
 
-            with st.expander(
-                item["item"]
-            ):
+            completed.append(item)
 
-                st.write(
-                    f"**Frequency:** "
-                    f"{item['frequency']}"
-                )
+    progress = (
+        len(completed) / len(checklist)
+    )
 
-                st.write(
-                    f"**Status:** "
-                    f"{item['status']}"
-                )
+    st.progress(progress)
 
-                st.write(
-                    f"**Evidence:** "
-                    f"{item['evidence']}"
-                )
+    st.caption(
+        f"{len(completed)} of "
+        f"{len(checklist)} items marked complete."
+    )
 
-                reviewed = st.checkbox(
-                    "Mark reviewed",
-                    key=f"compliance_{index}",
-                )
-
-                if reviewed:
-                    reviewed_count += 1
-
-        st.progress(
-            reviewed_count / len(checklist)
-        )
-
-        st.caption(
-            f"{reviewed_count} of "
-            f"{len(checklist)} checklist items reviewed."
-        )
-
-        st.download_button(
-            "Download Compliance Checklist JSON",
-            data=json.dumps(
-                checklist,
-                indent=2,
-            ),
-            file_name="compliance_checklist.json",
-            mime="application/json",
-        )
+    st.warning(
+        "Compliance requirements vary by jurisdiction, entity type, "
+        "activity, ownership, residency, and changes in law. "
+        "Verify current obligations with appropriate professionals "
+        "and official authorities."
+    )
 
 
 # ============================================================
-# REPORT GENERATOR
+# 15. REPORT GENERATOR
 # ============================================================
 
 elif page == "Report Generator":
 
-    st.title(
-        "Report Generator"
+    page_header(
+        "Report Generator",
+        "Generate and save a structured client-facing or internal advisory report.",
     )
 
-    st.caption(
-        "Generate a professional decision-support report "
-        "from the current engagement data."
+    clients = fetch_all(
+        """
+        SELECT
+            id,
+            client_name,
+            business_name,
+            country,
+            service,
+            status,
+            notes
+        FROM clients
+        ORDER BY id DESC
+        """
     )
 
-    if not st.session_state.intake:
+    if not clients:
 
         st.info(
-            "Complete Client Intake first."
-        )
-
-        st.button(
-            "Go to Client Intake →",
-            on_click=go_to,
-            args=("Client Intake",),
+            "Create a client record first in Client Intake."
         )
 
     else:
 
+        labels = {
+            row["id"]:
+                row["client_name"]
+                + (
+                    f" — {row['business_name']}"
+                    if row["business_name"]
+                    else ""
+                )
+            for row in clients
+        }
+
+        selected_id = st.selectbox(
+            "Client",
+            list(labels.keys()),
+            format_func=lambda value: labels[value],
+        )
+
+        client = fetch_one(
+            "SELECT * FROM clients WHERE id = ?",
+            (selected_id,),
+        )
+
+        report_type = st.selectbox(
+            "Report Type",
+            [
+                "Business Profile Report",
+                "Jurisdiction Analysis Report",
+                "Formation Roadmap Report",
+                "Engagement Summary",
+            ],
+        )
+
+        additional_context = st.text_area(
+            "Additional Context",
+            height=180,
+            placeholder=(
+                "Add findings, assumptions, questions, "
+                "or recommendations that should appear in the report."
+            ),
+        )
+
         if st.button(
-            "Generate Report",
+            "Generate & Save Report",
             type="primary",
         ):
 
-            st.session_state.report = (
-                render_markdown_report(
-                    st.session_state.intake,
-                    st.session_state.comparison,
-                )
-            )
+            timestamp = now_text()
 
-        if st.session_state.report:
+            report = f"""# PieroloOS — {report_type}
 
-            st.markdown(
-                st.session_state.report
-            )
+**PieroloCorp International LLC**
 
-            business_name = (
-                st.session_state.intake.get(
-                    "business_name"
-                )
-                or
-                st.session_state.intake.get(
-                    "client_name"
-                )
-                or
-                "engagement"
-            )
+## Client
 
-            filename = (
-                safe_filename(
-                    business_name
-                )
-                + "_pieroloos_report.md"
+- **Name:** {client['client_name']}
+- **Business:** {client['business_name'] or 'Not specified'}
+- **Country:** {client['country'] or 'Not specified'}
+- **Service:** {client['service']}
+- **Engagement Status:** {client['status']}
+- **Generated:** {timestamp}
+
+## Business Information
+
+{client['notes'] or 'No additional business information has been recorded.'}
+
+## Additional Context
+
+{additional_context or 'No additional context provided.'}
+
+## Operating Considerations
+
+1. Verify material facts against primary sources.
+2. Confirm jurisdiction-specific legal, tax, banking, and regulatory requirements.
+3. Separate factual findings from assumptions.
+4. Record client decisions and approvals.
+5. Preserve supporting documents and evidence.
+6. Update the engagement record as the matter progresses.
+
+## Disclaimer
+
+This report is generated by PieroloOS as a decision-support and professional-service workflow aid. It is not legal, tax, accounting, financial, immigration, regulatory, or other licensed professional advice. Current requirements should be independently verified with the appropriate qualified professional or official authority.
+"""
+
+            safe_name = safe_filename(
+                f"{client['client_name']}_"
+                f"{report_type}_"
+                f"{timestamp}"
             )
 
             report_path = (
-                EXPORT_DIR / filename
+                REPORT_DIR
+                / f"{safe_name}.md"
             )
 
             report_path.write_text(
-                st.session_state.report,
+                report,
                 encoding="utf-8",
             )
 
-            engagement_id = (
-                st.session_state.current_engagement_id
-            )
-
-            save_report_record(
-                engagement_id,
-                filename,
-                "Client Business Formation & Operating Report",
-            )
-
-            st.download_button(
-                "Download Report",
-                data=st.session_state.report,
-                file_name=filename,
-                mime="text/markdown",
+            execute_write(
+                """
+                INSERT INTO reports
+                (
+                    client_name,
+                    report_type,
+                    content,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    client["client_name"],
+                    report_type,
+                    report,
+                    timestamp,
+                ),
             )
 
             st.success(
-                "Report generated and recorded."
+                "Report generated and saved."
             )
+
+            st.download_button(
+                "Download Markdown Report",
+                data=report,
+                file_name=f"{safe_name}.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+
+            with st.expander(
+                "Preview Report",
+                expanded=True,
+            ):
+
+                st.markdown(report)
+
+    st.markdown("### Previous Reports")
+
+    reports = fetch_all(
+        """
+        SELECT
+            id,
+            client_name,
+            report_type,
+            created_at
+        FROM reports
+        ORDER BY id DESC
+        LIMIT 20
+        """
+    )
+
+    if reports:
+
+        st.dataframe(
+            [dict(row) for row in reports],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    else:
+
+        st.info(
+            "No reports have been generated yet."
+        )
 
 
 # ============================================================
-# ENGAGEMENT RECORDS
+# 16. ENGAGEMENT RECORDS
 # ============================================================
 
 elif page == "Engagement Records":
 
-    st.title(
-        "Engagement Records"
+    page_header(
+        "Engagement Records",
+        "Maintain a lightweight operational register for active client matters.",
     )
 
-    st.caption(
-        "Central record of client engagements created "
-        "through the PieroloOS MVP."
+    clients = fetch_all(
+        """
+        SELECT
+            id,
+            client_name,
+            business_name
+        FROM clients
+        ORDER BY id DESC
+        """
     )
 
-    rows = load_engagements()
+    if clients:
 
-    if not rows:
+        labels = {
+            row["id"]:
+                row["client_name"]
+                + (
+                    f" — {row['business_name']}"
+                    if row["business_name"]
+                    else ""
+                )
+            for row in clients
+        }
+
+        with st.form("engagement_form"):
+
+            selected_client = st.selectbox(
+                "Client",
+                list(labels.keys()),
+                format_func=lambda value:
+                    labels[value],
+            )
+
+            service = st.text_input(
+                "Engagement / Service"
+            )
+
+            status = st.selectbox(
+                "Status",
+                [
+                    "Open",
+                    "In Progress",
+                    "Awaiting Client",
+                    "Awaiting Provider",
+                    "Completed",
+                    "On Hold",
+                    "Closed",
+                ],
+            )
+
+            next_action = st.text_input(
+                "Next Action"
+            )
+
+            notes = st.text_area(
+                "Engagement Notes",
+                height=120,
+            )
+
+            create_engagement = st.form_submit_button(
+                "Create Engagement Record",
+                type="primary",
+                use_container_width=True,
+            )
+
+        if create_engagement:
+
+            client_row = fetch_one(
+                """
+                SELECT client_name
+                FROM clients
+                WHERE id = ?
+                """,
+                (selected_client,),
+            )
+
+            if client_row:
+
+                execute_write(
+                    """
+                    INSERT INTO engagements
+                    (
+                        client_name,
+                        service,
+                        status,
+                        next_action,
+                        notes,
+                        updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        client_row["client_name"],
+                        service.strip(),
+                        status,
+                        next_action.strip(),
+                        notes.strip(),
+                        now_text(),
+                    ),
+                )
+
+                st.success(
+                    "Engagement record created."
+                )
+
+                st.rerun()
+
+    else:
+
+        st.info(
+            "Create a client record first in Client Intake."
+        )
+
+    st.markdown("### Engagement Register")
+
+    engagements = fetch_all(
+        """
+        SELECT
+            id,
+            client_name,
+            service,
+            status,
+            next_action,
+            notes,
+            updated_at
+        FROM engagements
+        ORDER BY id DESC
+        """
+    )
+
+    if engagements:
+
+        st.dataframe(
+            [dict(row) for row in engagements],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.markdown(
+            "### Update Engagement Status"
+        )
+
+        engagement_ids = [
+            row["id"]
+            for row in engagements
+        ]
+
+        def engagement_label(
+            engagement_id: int,
+        ) -> str:
+
+            for row in engagements:
+
+                if row["id"] == engagement_id:
+
+                    return (
+                        f"#{row['id']} — "
+                        f"{row['client_name']} — "
+                        f"{row['service'] or 'Service not specified'}"
+                    )
+
+            return str(engagement_id)
+
+        selected_engagement = st.selectbox(
+            "Select Engagement",
+            engagement_ids,
+            format_func=engagement_label,
+        )
+
+        new_status = st.selectbox(
+            "New Status",
+            [
+                "Open",
+                "In Progress",
+                "Awaiting Client",
+                "Awaiting Provider",
+                "Completed",
+                "On Hold",
+                "Closed",
+            ],
+        )
+
+        new_next_action = st.text_input(
+            "Next Action",
+            key="engagement_next_action",
+        )
+
+        if st.button(
+            "Update Engagement",
+            type="primary",
+        ):
+
+            execute_write(
+                """
+                UPDATE engagements
+
+                SET
+                    status = ?,
+                    next_action = ?,
+                    updated_at = ?
+
+                WHERE id = ?
+                """,
+                (
+                    new_status,
+                    new_next_action.strip(),
+                    now_text(),
+                    selected_engagement,
+                ),
+            )
+
+            st.success(
+                "Engagement updated."
+            )
+
+            st.rerun()
+
+    else:
 
         st.info(
             "No engagement records yet."
         )
 
-        st.button(
-            "Create First Engagement →",
-            on_click=go_to,
-            args=("Client Intake",),
-        )
-
-    else:
-
-        st.markdown(
-            f"### {len(rows)} Engagement"
-            f"{'s' if len(rows) != 1 else ''}"
-        )
-
-        for row in rows:
-
-            business_display = (
-                row["business_name"]
-                or "Unnamed business"
-            )
-
-            with st.expander(
-                f"#{row['id']} — "
-                f"{row['client_name']} — "
-                f"{business_display}"
-            ):
-
-                c1, c2 = st.columns(2)
-
-                with c1:
-
-                    st.write(
-                        f"**Created:** "
-                        f"{row['created_at']}"
-                    )
-
-                    st.write(
-                        f"**Updated:** "
-                        f"{row['updated_at']}"
-                    )
-
-                    st.write(
-                        f"**Service:** "
-                        f"{row['service_type']}"
-                    )
-
-                with c2:
-
-                    st.write(
-                        f"**Current status:** "
-                        f"{row['status']}"
-                    )
-
-                    new_status = st.selectbox(
-                        "Change engagement status",
-                        [
-                            "Intake",
-                            "Research",
-                            "Planning",
-                            "Awaiting Approval",
-                            "Execution",
-                            "Review",
-                            "Closed",
-                        ],
-                        index=[
-                            "Intake",
-                            "Research",
-                            "Planning",
-                            "Awaiting Approval",
-                            "Execution",
-                            "Review",
-                            "Closed",
-                        ].index(
-                            row["status"]
-                        )
-                        if row["status"]
-                        in [
-                            "Intake",
-                            "Research",
-                            "Planning",
-                            "Awaiting Approval",
-                            "Execution",
-                            "Review",
-                            "Closed",
-                        ]
-                        else 0,
-                        key=f"status_{row['id']}",
-                    )
-
-                    if st.button(
-                        "Update Status",
-                        key=f"update_{row['id']}",
-                    ):
-
-                        update_engagement_status(
-                            row["id"],
-                            new_status,
-                        )
-
-                        st.success(
-                            "Engagement status updated."
-                        )
-
-                        st.rerun()
-
-                st.write(
-                    f"**Objective:** "
-                    f"{row['objective']}"
-                )
-
-                try:
-
-                    record = json.loads(
-                        row["data_json"]
-                    )
-
-                    with st.expander(
-                        "View structured record"
-                    ):
-
-                        st.json(
-                            record
-                        )
-
-                except (
-                    TypeError,
-                    json.JSONDecodeError,
-                ):
-
-                    st.write(
-                        "Record data could not be parsed."
-                    )
-
 
 # ============================================================
-# FOOTER
+# 17. FOOTER
 # ============================================================
 
 st.markdown(
     """
-    <div class="po-footer">
+    <div class="footer">
 
-        <strong>
-            PieroloCorp International LLC
-        </strong>
+        <b>PIEROLOOS v0.1</b>
+        · Professional Service Operating System
+        · PieroloCorp International LLC
 
         <br>
 
-        Professional Services for a More
-        Connected Global Economy.
-
-        <span class="po-footer-right">
-
-            PieroloOS v0.1
-            &nbsp; • &nbsp;
-            Build
-            &nbsp; • &nbsp;
-            Structure
-            &nbsp; • &nbsp;
-            Scale
-            &nbsp; • &nbsp;
-            Globally
-
-        </span>
+        Decision-support prototype · Verify legal, tax,
+        regulatory, banking, and compliance matters with
+        appropriate professionals and official authorities.
 
     </div>
     """,
     unsafe_allow_html=True,
-    )
+)
