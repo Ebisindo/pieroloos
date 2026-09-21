@@ -91,6 +91,7 @@ def get_connection() -> sqlite3.Connection:
 
 
 def initialize_database() -> None:
+    """Create the PieroloOS tables and migrate older database schemas."""
 
     connection = get_connection()
     cursor = connection.cursor()
@@ -138,6 +139,50 @@ def initialize_database() -> None:
         )
         """
     )
+
+    # Migrate databases created by earlier versions of the MVP.
+    expected_columns = {
+        "clients": {
+            "client_name": "TEXT",
+            "email": "TEXT",
+            "phone": "TEXT",
+            "country": "TEXT",
+            "business_name": "TEXT",
+            "business_type": "TEXT",
+            "service": "TEXT",
+            "status": "TEXT DEFAULT 'New'",
+            "notes": "TEXT",
+            "created_at": "TEXT",
+        },
+        "reports": {
+            "client_name": "TEXT",
+            "report_type": "TEXT",
+            "content": "TEXT",
+            "created_at": "TEXT",
+        },
+        "engagements": {
+            "client_name": "TEXT",
+            "service": "TEXT",
+            "status": "TEXT DEFAULT 'Open'",
+            "next_action": "TEXT",
+            "notes": "TEXT",
+            "updated_at": "TEXT",
+        },
+    }
+
+    for table, columns in expected_columns.items():
+        existing_columns = {
+            row[1]
+            for row in cursor.execute(
+                f"PRAGMA table_info({table})"
+            ).fetchall()
+        }
+
+        for column, definition in columns.items():
+            if column not in existing_columns:
+                cursor.execute(
+                    f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+                )
 
     connection.commit()
     connection.close()
