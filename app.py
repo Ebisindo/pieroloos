@@ -571,31 +571,26 @@ with st.sidebar:
     ):
 
         if BACKGROUND_EXISTS:
-            st.success(
-                "Background loaded",
-                icon="✓",
-            )
-        else:
-            st.warning(
-                "Background not found",
-                icon="!",
-            )
+    st.success(
+        "Background loaded"
+    )
+    else:
+    st.warning(
+        "Background not found"
+    )
 
-        if LOGO_EXISTS:
-            st.success(
-                f"Logo loaded: {LOGO_PATH.name}",
-                icon="✓",
-            )
-        else:
-            st.warning(
-                "Logo not found",
-                icon="!",
-            )
+    if LOGO_EXISTS:
+    st.success(
+        f"Logo loaded: {LOGO_PATH.name}"
+    )
+    else:
+    st.warning(
+        "Logo not found"
+    )
 
-        st.success(
-            "Database ready",
-            icon="✓",
-        )
+    st.success(
+    "Database ready"
+    )
 
     st.divider()
 
