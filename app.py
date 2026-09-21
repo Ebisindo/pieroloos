@@ -567,7 +567,6 @@ with st.sidebar:
     )
 
     with st.expander("System Status"):
-
     if BACKGROUND_EXISTS:
         st.success("Background loaded")
     else:
