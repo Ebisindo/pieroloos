@@ -644,40 +644,46 @@ JURISDICTIONS = [
 
 
 
-def render_page_banner(page_name: str, title: str, subtitle: str) -> None:
-    """Render a page-specific graphical hero with a branded overlay."""
-    banner_path = PAGE_BANNER_CANDIDATES.get(page_name)
-    image_uri = load_image_data_uri(str(banner_path)) if banner_path and asset_exists(banner_path) else ""
+def render_page_banner(page_name: str) -> None:
+    """Render a page-specific graphical banner only.
 
-    if image_uri:
-        st.markdown(
-            f"""
-            <section class="page-banner">
-                <img class="page-banner-image" src="{image_uri}" alt="{title} graphical header" />
-                <div class="page-banner-overlay"></div>
-                <div class="page-banner-content">
-                    <div class="page-banner-eyebrow">PIEROLOOS · PIEROLOCORP INTERNATIONAL LLC</div>
-                    <div class="page-banner-title">{title}</div>
-                    <div class="page-banner-subtitle">{subtitle}</div>
-                </div>
-            </section>
-            """,
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            f"""
-            <section class="page-banner page-banner-fallback">
-                <div class="page-banner-content">
-                    <div class="page-banner-eyebrow">PIEROLOOS · PIEROLOCORP INTERNATIONAL LLC</div>
-                    <div class="page-banner-title">{title}</div>
-                    <div class="page-banner-subtitle">{subtitle}</div>
-                    <div class="page-banner-missing">GRAPHICAL ASSET NOT FOUND · CHECK /assets/{banner_path.name if banner_path else ''}</div>
-                </div>
-            </section>
-            """,
-            unsafe_allow_html=True,
-        )
+    Page titles and descriptive text are intentionally NOT rendered
+    inside the banner. Each page's Streamlit H1 below the banner is
+    the authoritative page heading.
+    """
+    banner_path = PAGE_BANNER_CANDIDATES.get(page_name)
+
+    if banner_path and asset_exists(banner_path):
+        image_uri = load_image_data_uri(str(banner_path))
+
+        if image_uri:
+            st.markdown(
+                f"""
+                <section class="page-banner" aria-label="{page_name} graphical banner">
+                    <img
+                        class="page-banner-image"
+                        src="{image_uri}"
+                        alt=""
+                    />
+                    <div class="page-banner-overlay"></div>
+                </section>
+                """,
+                unsafe_allow_html=True,
+            )
+            return
+
+    # Keep a graphical fallback so the page layout remains stable when
+    # an asset is unavailable. The missing asset message is intentionally
+    # omitted from the visible banner; the sidebar System Status provides
+    # asset diagnostics.
+    st.markdown(
+        """
+        <section class="page-banner page-banner-fallback" aria-label="Graphical banner">
+            <div class="page-banner-fallback-glow"></div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ============================================================
@@ -762,55 +768,45 @@ def inject_styles() -> None:
     .page-banner-overlay {
         position: absolute;
         inset: 0;
-        background: linear-gradient(90deg, rgba(5,5,18,0.94) 0%, rgba(5,5,18,0.68) 42%, rgba(5,5,18,0.24) 100%);
-    }
-
-    .page-banner-content {
-        position: relative;
-        z-index: 2;
-        min-height: 290px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        padding: 2rem 3rem;
-        max-width: 850px;
-    }
-
-    .page-banner-eyebrow {
-        color: var(--gold-light);
-        font-size: 0.72rem;
-        font-weight: 800;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        margin-bottom: 0.75rem;
-    }
-
-    .page-banner-title {
-        color: #ffffff;
-        font-size: clamp(2rem, 4vw, 3.6rem);
-        line-height: 1.05;
-        font-weight: 850;
-        letter-spacing: -0.035em;
-        text-shadow: 0 5px 25px rgba(0,0,0,0.55);
-    }
-
-    .page-banner-subtitle {
-        color: #d9d2e9;
-        font-size: 1rem;
-        line-height: 1.55;
-        margin-top: 0.9rem;
-        max-width: 680px;
-    }
-
-    .page-banner-missing {
-        margin-top: 1rem;
-        color: #e5c66d;
-        font-size: 0.7rem;
-        letter-spacing: 0.08em;
+        background: linear-gradient(
+            90deg,
+            rgba(5,5,18,0.28) 0%,
+            rgba(5,5,18,0.06) 50%,
+            rgba(5,5,18,0.20) 100%
+        );
+        pointer-events: none;
     }
 
     .page-banner-fallback {
-        background: radial-gradient(circle at 80% 20%, rgba(155,108,255,0.25), transparent 34%), linear-gradient(135deg, #090718, #17102e, #050512);
+        background:
+            radial-gradient(
+                circle at 80% 20%,
+                rgba(155,108,255,0.28),
+                transparent 34%
+            ),
+            radial-gradient(
+                circle at 20% 80%,
+                rgba(215,180,90,0.12),
+                transparent 30%
+            ),
+            linear-gradient(
+                135deg,
+                #090718,
+                #17102e,
+                #050512
+            );
+    }
+
+    .page-banner-fallback-glow {
+        position: absolute;
+        inset: 0;
+        background:
+            linear-gradient(
+                115deg,
+                transparent 0%,
+                rgba(255,255,255,0.03) 45%,
+                transparent 70%
+            );
     }
 
     div[data-testid="stMetric"] {
@@ -862,10 +858,7 @@ def inject_styles() -> None:
     @media (max-width: 768px) {
         .block-container { padding-left: 0.85rem; padding-right: 0.85rem; }
         .page-banner { min-height: 220px; border-radius: 18px; }
-        .page-banner-content { min-height: 220px; padding: 1.35rem 1.25rem; }
-        .page-banner-title { font-size: 2rem; }
-        .page-banner-subtitle { font-size: 0.86rem; }
-        .page-banner-overlay { background: linear-gradient(90deg, rgba(5,5,18,0.94), rgba(5,5,18,0.55)); }
+        .page-banner-overlay { background: linear-gradient(90deg, rgba(5,5,18,0.20), rgba(5,5,18,0.05)); }
     }
     </style>
     """
@@ -964,6 +957,7 @@ with st.sidebar:
 
 # ============================================================
 # 8. COMMAND CENTER
+# The graphical banner is visual-only. The Streamlit H1 below is the page heading.
 # ============================================================
 
 if page == "Command Center":
@@ -974,8 +968,6 @@ if page == "Command Center":
 
     render_page_banner(
         "Command Center",
-        "PieroloOS Command Center",
-        "Executive visibility across the professional-service operating environment.",
     )
 
     st.title(
@@ -1288,8 +1280,6 @@ elif page == "Client Intake":
 
     render_page_banner(
         "Client Intake",
-        "Client Intake",
-        "Capture a structured client and business brief.",
     )
 
     st.title(
@@ -1477,8 +1467,6 @@ elif page == "Business Profile":
 
     render_page_banner(
         "Business Profile",
-        "Business Profile",
-        "Build a decision-ready commercial and strategic profile.",
     )
 
     st.title(
@@ -1676,8 +1664,6 @@ elif page == "Jurisdiction Lens":
 
     render_page_banner(
         "Jurisdiction Lens",
-        "Jurisdiction Lens",
-        "Structured jurisdiction intelligence for business decisions.",
     )
 
     st.title(
@@ -1862,8 +1848,6 @@ elif page == "Formation Roadmap":
 
     render_page_banner(
         "Formation Roadmap",
-        "Formation Roadmap",
-        "Translate business intent into an executable formation sequence.",
     )
 
     st.title(
@@ -2078,8 +2062,6 @@ elif page == "Compliance":
 
     render_page_banner(
         "Compliance",
-        "Compliance Control",
-        "Keep recurring corporate and operational obligations visible.",
     )
 
     st.title(
@@ -2151,8 +2133,6 @@ elif page == "Report Generator":
 
     render_page_banner(
         "Report Generator",
-        "Report Generator",
-        "Turn structured client information into professional outputs.",
     )
 
     st.title(
@@ -2370,8 +2350,6 @@ elif page == "Engagement Records":
 
     render_page_banner(
         "Engagement Records",
-        "Engagement Control",
-        "Track client matters, actions, status and operational history.",
     )
 
     st.title(
@@ -2618,3 +2596,4 @@ st.caption(
     "banking, and compliance matters with appropriate professionals "
     "and official authorities."
 )
+    
