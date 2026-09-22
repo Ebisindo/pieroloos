@@ -736,20 +736,27 @@ def inject_styles() -> None:
 
     html, body {
         background: #03030d !important;
+    }
+
+    html, body, #root {
         margin: 0 !important;
         padding: 0 !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        overflow-x: hidden !important;
     }
 
     .stApp {
         position: relative;
         isolation: isolate;
-        min-height: 100vh;
+        min-height: 0 !important;
+        height: auto !important;
         BACKGROUND_CSS_PLACEHOLDER
         background-size: cover;
         background-position: center;
         background-attachment: fixed;
         color: var(--text);
-        overflow-x: hidden;
+        overflow: visible !important;
     }
 
     /* Deep-space colour field + stars across the entire application. */
@@ -877,47 +884,46 @@ def inject_styles() -> None:
             radial-gradient(circle at 28% 65%, rgba(155,108,255,0.08), transparent 22%);
     }
 
-    /* The content area must end at the PieroloOS footer.
-       Avoid Streamlit's default bottom breathing room becoming
-       an invisible scroll zone beneath the footer. */
     .block-container {
         max-width: 1500px;
-        padding-top: 1.25rem;
+        padding-top: 1.25rem !important;
         padding-bottom: 0 !important;
         margin-bottom: 0 !important;
     }
 
-    [data-testid="stMain"] {
-        padding-bottom: 0 !important;
-        margin-bottom: 0 !important;
-    }
-
+    [data-testid="stMain"],
     [data-testid="stAppViewContainer"] {
         padding-bottom: 0 !important;
         margin-bottom: 0 !important;
     }
 
-    /* Suppress Streamlit's separate platform footer so the
-       PieroloOS footer remains the final visible application boundary. */
-    [data-testid="stFooter"] {
+    [data-testid="stAppViewContainer"] {
+        min-height: 100vh !important;
+        height: 100vh !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        scroll-padding-bottom: 0 !important;
+    }
+
+    [data-testid="stAppViewContainer"] > .main {
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
+    }
+
+    [data-testid="stAppViewContainer"] > .main > div {
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
+    }
+
+    /* Eliminate Streamlit's own trailing platform/footer region. */
+    [data-testid="stFooter"],
+    footer:not(.pieroloos-footer) {
         display: none !important;
         height: 0 !important;
         min-height: 0 !important;
+        max-height: 0 !important;
         margin: 0 !important;
         padding: 0 !important;
-    }
-
-    .pieroloos-footer {
-        width: 100%;
-        margin: 1.5rem 0 0 0;
-        padding: 1rem 0 0 0;
-        border-top: 1px solid rgba(215,180,90,0.22);
-        text-align: center;
-        box-sizing: border-box;
-    }
-
-    .pieroloos-footer p {
-        margin: 0.25rem 0;
     }
 
     /* ========================================================
@@ -1013,8 +1019,200 @@ def inject_styles() -> None:
     }
 
     /* ========================================================
+       PROFESSIONAL COSMIC CONTENT SYSTEM
+       ======================================================== */
+
+    /* High-contrast body copy */
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li,
+    [data-testid="stText"],
+    .stWrite,
+    .stCaption {
+        color: #ded8ef !important;
+    }
+
+    .stCaption {
+        color: #b9afd3 !important;
+    }
+
+    /* Section headings use a gold/violet/cyan hierarchy. */
+    h1 {
+        color: #f6dc91 !important;
+        letter-spacing: -0.025em;
+        text-shadow:
+            0 0 18px rgba(215,180,90,0.18),
+            0 0 38px rgba(155,108,255,0.10);
+    }
+
+    h2 {
+        color: #d9c5ff !important;
+        text-shadow: 0 0 18px rgba(155,108,255,0.12);
+    }
+
+    h3 {
+        color: #70ddff !important;
+        text-shadow: 0 0 15px rgba(98,217,255,0.12);
+    }
+
+    /* Content cards: layered cosmic glass with gold/violet/cyan edge. */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        position: relative;
+        overflow: hidden;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(155,108,255,0.12), transparent 34%),
+            radial-gradient(circle at 0% 100%, rgba(98,217,255,0.075), transparent 32%),
+            linear-gradient(145deg, rgba(19,13,48,0.82), rgba(6,6,24,0.72)) !important;
+        border: 1px solid rgba(155,108,255,0.24) !important;
+        border-radius: 18px !important;
+        box-shadow:
+            0 16px 42px rgba(0,0,0,0.22),
+            inset 0 1px 0 rgba(255,255,255,0.035);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+    }
+
+    [data-testid="stVerticalBlockBorderWrapper"]::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #62d9ff, #9b6cff, #d7b45a);
+        opacity: 0.78;
+        pointer-events: none;
+    }
+
+    /* Alternate card accents across the workspace. */
+    [data-testid="stVerticalBlockBorderWrapper"]:nth-of-type(3n+1)::before {
+        background: linear-gradient(90deg, #62d9ff, #4e8cff);
+    }
+
+    [data-testid="stVerticalBlockBorderWrapper"]:nth-of-type(3n+2)::before {
+        background: linear-gradient(90deg, #9b6cff, #d76cff);
+    }
+
+    [data-testid="stVerticalBlockBorderWrapper"]:nth-of-type(3n)::before {
+        background: linear-gradient(90deg, #d7b45a, #f4dc91, #9b6cff);
+    }
+
+    [data-testid="stVerticalBlockBorderWrapper"] h3 {
+        color: #f3dc92 !important;
+    }
+
+    [data-testid="stVerticalBlockBorderWrapper"] strong {
+        color: #e7d0ff !important;
+    }
+
+    /* Workflow labels / numbered content. */
+    [data-testid="stMarkdownContainer"] strong {
+        color: #f0d787 !important;
+    }
+
+    /* Status/info surfaces become part of the cosmic palette. */
+    [data-testid="stAlert"] {
+        background: rgba(13,10,35,0.72) !important;
+        border-radius: 14px !important;
+        backdrop-filter: blur(12px);
+    }
+
+    /* Inputs, selects and textareas: readable, luminous, restrained. */
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="textarea"] {
+        background: rgba(8,7,27,0.80) !important;
+        border-color: rgba(155,108,255,0.28) !important;
+        box-shadow: inset 0 0 0 1px rgba(98,217,255,0.025);
+    }
+
+    label,
+    [data-testid="stWidgetLabel"] p {
+        color: #cbb9ee !important;
+        font-weight: 650 !important;
+    }
+
+    input, textarea {
+        color: #f7f4ff !important;
+        caret-color: #f1d98a !important;
+    }
+
+    /* ========================================================
+       COSMIC ACTION BUTTON SYSTEM
+       ======================================================== */
+
+    div[data-testid="stButton"] > button,
+    div[data-testid="stFormSubmitButton"] > button,
+    div[data-testid="stDownloadButton"] > button {
+        min-height: 44px;
+        border: 1px solid rgba(215,180,90,0.34) !important;
+        border-radius: 13px !important;
+        background:
+            linear-gradient(135deg, rgba(32,19,70,0.94), rgba(10,8,30,0.94)) !important;
+        color: #f8f3ff !important;
+        font-weight: 750 !important;
+        letter-spacing: 0.01em;
+        box-shadow:
+            0 8px 24px rgba(0,0,0,0.20),
+            inset 0 1px 0 rgba(255,255,255,0.035);
+        transition:
+            transform 160ms ease,
+            border-color 160ms ease,
+            box-shadow 160ms ease,
+            color 160ms ease;
+    }
+
+    div[data-testid="stButton"] > button:hover,
+    div[data-testid="stFormSubmitButton"] > button:hover,
+    div[data-testid="stDownloadButton"] > button:hover {
+        transform: translateY(-1px);
+        border-color: rgba(244,220,145,0.82) !important;
+        color: #f7dd8f !important;
+        box-shadow:
+            0 0 28px rgba(155,108,255,0.13),
+            0 10px 26px rgba(0,0,0,0.24);
+    }
+
+    /* Distinct button families by position create a richer visual package. */
+    div[data-testid="stButton"]:nth-of-type(3n+1) > button {
+        background: linear-gradient(135deg, rgba(18,54,78,0.94), rgba(8,20,42,0.94)) !important;
+        border-color: rgba(98,217,255,0.38) !important;
+    }
+
+    div[data-testid="stButton"]:nth-of-type(3n+2) > button {
+        background: linear-gradient(135deg, rgba(52,24,84,0.94), rgba(17,9,43,0.94)) !important;
+        border-color: rgba(155,108,255,0.40) !important;
+    }
+
+    div[data-testid="stButton"]:nth-of-type(3n) > button {
+        background: linear-gradient(135deg, rgba(71,53,20,0.94), rgba(27,19,10,0.94)) !important;
+        border-color: rgba(215,180,90,0.42) !important;
+    }
+
+    /* Data/table text */
+    [data-testid="stDataFrame"] {
+        border: 1px solid rgba(155,108,255,0.20);
+        border-radius: 14px;
+        box-shadow: 0 14px 35px rgba(0,0,0,0.18);
+        overflow: hidden;
+    }
+
+    /* Expander headers get a distinct cosmic treatment. */
+    [data-testid="stExpander"] {
+        background:
+            linear-gradient(145deg, rgba(15,11,38,0.80), rgba(7,6,23,0.70)) !important;
+        border: 1px solid rgba(155,108,255,0.23) !important;
+        border-radius: 15px !important;
+    }
+
+    [data-testid="stExpander"] summary {
+        color: #e4d3ff !important;
+        font-weight: 700 !important;
+    }
+
+    /* ========================================================
        PAGE-SPECIFIC BANNERS
        ======================================================== */
+
 
     .page-banner {
         position: relative;
@@ -1082,13 +1280,120 @@ def inject_styles() -> None:
     }
 
     /* ========================================================
+       TRUE APPLICATION ENDPOINT / FOOTER
+       ======================================================== */
+
+    .pieroloos-footer-spacer {
+        display: none !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .pieroloos-footer {
+        position: relative;
+        width: 100%;
+        margin: 1.75rem 0 0 0 !important;
+        padding: 1.15rem 1rem 1.25rem 1rem !important;
+        box-sizing: border-box;
+        text-align: center;
+        border-top: 1px solid rgba(215,180,90,0.30);
+        background:
+            radial-gradient(circle at 50% 0%, rgba(155,108,255,0.14), transparent 45%),
+            linear-gradient(180deg, rgba(9,7,28,0.76), rgba(4,4,16,0.94));
+        box-shadow:
+            0 -18px 50px rgba(0,0,0,0.22),
+            inset 0 1px 0 rgba(255,255,255,0.025);
+        overflow: hidden;
+    }
+
+    .footer-orbit {
+        position: absolute;
+        width: 230px;
+        height: 38px;
+        left: 50%;
+        top: -19px;
+        transform: translateX(-50%) rotate(-7deg);
+        border: 1px solid rgba(98,217,255,0.22);
+        border-radius: 50%;
+        box-shadow: 0 0 28px rgba(98,217,255,0.08);
+        pointer-events: none;
+    }
+
+    .footer-brand {
+        position: relative;
+        color: #f2d98d;
+        font-size: 0.90rem;
+        font-weight: 850;
+        letter-spacing: 0.18em;
+        text-shadow: 0 0 18px rgba(215,180,90,0.16);
+    }
+
+    .footer-company {
+        position: relative;
+        margin-top: 0.25rem;
+        color: #cdbce9;
+        font-size: 0.76rem;
+        font-weight: 650;
+    }
+
+    .footer-disclaimer {
+        position: relative;
+        max-width: 920px;
+        margin: 0.45rem auto 0;
+        color: #938aa9;
+        font-size: 0.68rem;
+        line-height: 1.45;
+    }
+
+    .pieroloos-scroll-end {
+        display: block !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* No hidden tail below the final footer element. */
+    .pieroloos-footer + * {
+        display: none !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* ========================================================
        MOBILE / TABLET
        ======================================================== */
 
     @media (max-width: 768px) {
+        [data-testid="stAppViewContainer"] {
+            height: 100vh !important;
+            min-height: 100vh !important;
+        }
+
         .block-container {
             padding-left: 0.85rem;
             padding-right: 0.85rem;
+            padding-bottom: 0 !important;
+        }
+
+        .pieroloos-footer {
+            margin-top: 1rem !important;
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+        }
+
+        .footer-company {
+            font-size: 0.70rem;
+        }
+
+        .footer-disclaimer {
+            font-size: 0.62rem;
         }
 
         .page-banner {
@@ -1110,11 +1415,27 @@ def inject_styles() -> None:
             width: 520px;
             height: 230px;
         }
+    }
 
-        .pieroloos-footer {
-            margin-top: 1rem;
-            padding-top: 0.85rem;
-        }
+    /* Native scrollbar remains available, but the scrollable surface is
+       the application container whose content terminates at the footer. */
+    [data-testid="stAppViewContainer"]::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    [data-testid="stAppViewContainer"]::-webkit-scrollbar-track {
+        background: rgba(3,3,13,0.30);
+    }
+
+    [data-testid="stAppViewContainer"]::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, rgba(155,108,255,0.62), rgba(215,180,90,0.62));
+        border-radius: 20px;
+        border: 2px solid rgba(3,3,13,0.45);
+    }
+
+    [data-testid="stAppViewContainer"] {
+        scrollbar-color: rgba(155,108,255,0.65) rgba(3,3,13,0.30);
+        scrollbar-width: thin;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -2851,15 +3172,24 @@ elif page == "Engagement Records":
 
 
 # ============================================================
-# 16. FOOTER
+# 16. FOOTER — ABSOLUTE END OF APPLICATION CONTENT
 # ============================================================
 
 st.markdown(
     """
+    <div class="pieroloos-footer-spacer" aria-hidden="true"></div>
     <footer class="pieroloos-footer" aria-label="PieroloOS footer">
-        <p>PIEROLOOS v0.1 · Professional Service Operating System · PieroloCorp International LLC</p>
-        <p>Decision-support prototype. Verify legal, tax, regulatory, banking, and compliance matters with appropriate professionals and official authorities.</p>
+        <div class="footer-orbit"></div>
+        <div class="footer-brand">PIEROLOOS</div>
+        <div class="footer-company">
+            Professional Service Operating System · PieroloCorp International LLC
+        </div>
+        <div class="footer-disclaimer">
+            Decision-support prototype. Verify legal, tax, regulatory, banking,
+            and compliance matters with appropriate professionals and official authorities.
+        </div>
     </footer>
+    <div class="pieroloos-scroll-end" aria-hidden="true"></div>
     """,
     unsafe_allow_html=True,
     )
