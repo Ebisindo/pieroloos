@@ -1,13 +1,3 @@
-# PieroloOS
-
-PieroloOS v0.1 — Core MVP for PieroloCorp International LLC.
-
-## Run locally
-
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-
 # PieroloOS v0.1
 
 ## Professional Service Operating System for PieroloCorp International LLC
@@ -837,3 +827,73 @@ The long-term goal is to turn professional-service knowledge and workflows into 
 
 **PieroloOS v0.1**  
 **PieroloCorp International LLC**
+
+
+---
+
+# 25. Visual Asset System — v0.1 Upgrade
+
+The MVP now supports a dedicated visual asset layer in addition to the global cosmic SVG background.
+
+The `assets/` directory is designed to contain both persistent brand assets and page-specific visual compositions:
+
+```text
+assets/
+├── pieroloos_background.svg
+├── pierolocorp_logo.png
+├── pieroloos_command_center.png
+├── pieroloos_client_intake.png
+├── pieroloos_business_profile.png
+├── pieroloos_jurisdiction.png
+├── pieroloos_formation.png
+├── pieroloos_compliance.png
+├── pieroloos_reports.png
+└── pieroloos_engagements.png
+```
+
+Each major workspace page has a dedicated graphical header. This creates a consistent visual system while keeping the underlying Streamlit interface functional and responsive.
+
+The visual layer is intentionally separated from application logic so that future design iterations can replace individual PNG assets without rewriting the core workflows.
+
+---
+
+# 26. Investor / VC Presentation Direction
+
+The current visual upgrade establishes a more polished product surface for demonstrations, stakeholder discussions, and early investor conversations.
+
+The MVP should nevertheless be presented accurately as a working prototype rather than as a completed enterprise SaaS platform.
+
+The product-quality direction is:
+
+```text
+Working MVP
+     ↓
+Professional Product Surface
+     ↓
+Validated Workflows
+     ↓
+Operational Intelligence
+     ↓
+Production Architecture
+     ↓
+Scalable SaaS Platform
+```
+
+Future investor-facing product improvements should include:
+
+- Product analytics
+- Secure authentication
+- Multi-tenancy
+- Managed PostgreSQL
+- Audit trails
+- Evidence/source management
+- Role-based permissions
+- API architecture
+- Background jobs
+- Document storage
+- Billing/subscriptions
+- Production security controls
+- Automated compliance monitoring
+- Corporate intelligence modules
+
+The visual design should support the product story without making unsupported claims about traction, market position, valuation, or investment readiness.
