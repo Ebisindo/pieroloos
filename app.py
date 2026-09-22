@@ -75,21 +75,6 @@ BACKGROUND_EXISTS = BACKGROUND_PATH.exists()
 LOGO_EXISTS = LOGO_PATH is not None
 
 
-# Additional page-specific visual assets.
-PAGE_BANNER_CANDIDATES = {
-    "Command Center": ASSET_DIR / "pieroloos_command_center.png",
-    "Client Intake": ASSET_DIR / "pieroloos_client_intake.png",
-    "Business Profile": ASSET_DIR / "pieroloos_business_profile.png",
-    "Jurisdiction Lens": ASSET_DIR / "pieroloos_jurisdiction.png",
-    "Formation Roadmap": ASSET_DIR / "pieroloos_formation.png",
-    "Compliance": ASSET_DIR / "pieroloos_compliance.png",
-    "Report Generator": ASSET_DIR / "pieroloos_reports.png",
-    "Engagement Records": ASSET_DIR / "pieroloos_engagements.png",
-}
-
-PAGE_BANNER_WIDTH = 1600
-
-
 # ============================================================
 # 3. DATABASE
 # ============================================================
@@ -433,14 +418,13 @@ def execute_write(
 
     connection = get_connection()
 
-    try:
-        connection.execute(query, params)
-        connection.commit()
-    except sqlite3.Error as exc:
-        connection.rollback()
-        raise RuntimeError(f"Database operation failed: {exc}") from exc
-    finally:
-        connection.close()
+    connection.execute(
+        query,
+        params,
+    )
+
+    connection.commit()
+    connection.close()
 
 
 def fetch_all(
@@ -603,45 +587,25 @@ JURISDICTIONS = [
 ]
 
 
-
-def render_page_banner(page_name: str, title: str, subtitle: str) -> None:
-    """Render a branded graphical header on every major workspace page."""
-    banner_path = PAGE_BANNER_CANDIDATES.get(page_name)
-
-    if banner_path and banner_path.exists():
-        st.image(str(banner_path), use_container_width=True)
-    else:
-        st.markdown(
-            f"""
-            <div class="page-banner-fallback">
-                <div class="page-banner-eyebrow">PIEROLOOS · PIEROLOCORP INTERNATIONAL LLC</div>
-                <div class="page-banner-title">{title}</div>
-                <div class="page-banner-subtitle">{subtitle}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-
 # ============================================================
 # 6. VISUAL DESIGN
 # ============================================================
 
 def inject_styles() -> None:
 
+    # Keep the CSS as a normal string rather than an f-string.
+    # This prevents CSS braces such as { border: ...; } from being
+    # interpreted by Python as expressions and causing NameError.
     if BACKGROUND_URI:
-
-        background_css = f"""
-        background-image:
-            linear-gradient(
-                rgba(5, 5, 18, 0.78),
-                rgba(5, 5, 18, 0.90)
-            ),
-            url("{BACKGROUND_URI}");
-        """
-
+        background_css = (
+            "background-image: "
+            "linear-gradient("
+            "rgba(5, 5, 18, 0.78), "
+            "rgba(5, 5, 18, 0.90)"
+            "), "
+            f"url('{BACKGROUND_URI}');"
+        )
     else:
-
         background_css = """
         background:
             radial-gradient(
@@ -657,181 +621,115 @@ def inject_styles() -> None:
             );
         """
 
-    st.markdown(
-        f"""
-        <style>
+    css = """
+    <style>
 
-        :root {{
-            --gold: #d7b45a;
-            --gold-light: #f1d98a;
-            --violet: #9b6cff;
-            --violet-light: #c5a7ff;
-            --navy: #050512;
-            --panel: rgba(12, 10, 31, 0.82);
-            --border: rgba(215, 180, 90, 0.20);
-            --text: #f6f3ff;
-            --muted: #aaa3c2;
-        }}
+    :root {
+        --gold: #d7b45a;
+        --gold-light: #f1d98a;
+        --violet: #9b6cff;
+        --violet-light: #c5a7ff;
+        --navy: #050512;
+        --panel: rgba(12, 10, 31, 0.82);
+        --border: rgba(215, 180, 90, 0.20);
+        --text: #f6f3ff;
+        --muted: #aaa3c2;
+    }
 
-        .stApp {{
-            {background_css}
+    .stApp {
+        BACKGROUND_CSS_PLACEHOLDER
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        color: var(--text);
+    }
 
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
+    [data-testid="stSidebar"] {
+        background: rgba(5, 5, 18, 0.97);
+        border-right: 1px solid rgba(215, 180, 90, 0.20);
+    }
 
-            color: var(--text);
-        }}
+    .block-container {
+        max-width: 1500px;
+        padding-top: 1.5rem;
+        padding-bottom: 4rem;
+    }
 
-        [data-testid="stSidebar"] {{
-            background:
-                rgba(5, 5, 18, 0.97);
+    h1 { color: var(--gold-light); }
+    h2 { color: #f6f0ff; }
+    h3 { color: #f1eaff; }
 
-            border-right:
-                1px solid
-                rgba(215, 180, 90, 0.20);
-        }}
+    p { color: #d0c9df; }
 
-        .block-container {{
-            max-width: 1500px;
-            padding-top: 1.5rem;
-            padding-bottom: 4rem;
-        }}
+    .stCaption { color: #9991ac; }
 
-        h1 {{
-            color: var(--gold-light);
-        }}
+    div[data-testid="stMetric"] {
+        background: rgba(12, 10, 31, 0.78);
+        border: 1px solid rgba(215, 180, 90, 0.18);
+        border-radius: 18px;
+        padding: 1rem;
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.20);
+    }
 
-        h2 {{
-            color: #f6f0ff;
-        }}
+    div[data-testid="stMetricLabel"] {
+        color: #aaa3c2;
+    }
 
-        h3 {{
-            color: #f1eaff;
-        }}
+    div[data-testid="stMetricValue"] {
+        color: #f1d98a;
+    }
 
-        p {{
-            color: #d0c9df;
-        }}
+    div[data-testid="stButton"] > button {
+        border: 1px solid rgba(215, 180, 90, 0.25);
+        border-radius: 12px;
+        background: rgba(15, 11, 35, 0.90);
+        color: #f4edff;
+        font-weight: 700;
+    }
 
-        .stCaption {{
-            color: #9991ac;
-        }}
+    div[data-testid="stButton"] > button:hover {
+        border-color: rgba(215, 180, 90, 0.70);
+        color: #f1d98a;
+    }
 
-        div[data-testid="stMetric"] {{
-            background:
-                rgba(12, 10, 31, 0.78);
+    div[data-testid="stFormSubmitButton"] > button {
+        border-radius: 12px;
+        font-weight: 800;
+    }
 
-            border:
-                1px solid
-                rgba(215, 180, 90, 0.18);
+    [data-testid="stExpander"] {
+        background: rgba(12, 10, 31, 0.72);
+        border: 1px solid rgba(155, 108, 255, 0.18);
+        border-radius: 15px;
+    }
 
-            border-radius: 18px;
+    [data-testid="stDataFrame"] {
+        border-radius: 14px;
+    }
 
-            padding: 1rem;
+    .hero-spacer {
+        height: 10px;
+    }
 
-            box-shadow:
-                0 12px 35px
-                rgba(0, 0, 0, 0.20);
-        }}
-
-        div[data-testid="stMetricLabel"] {{
-            color: #aaa3c2;
-        }}
-
-        div[data-testid="stMetricValue"] {{
-            color: #f1d98a;
-        }}
-
-        div[data-testid="stButton"] > button {{
-            border:
-                1px solid
-                rgba(215, 180, 90, 0.25);
-
-            border-radius: 12px;
-
-            background:
-                rgba(15, 11, 35, 0.90);
-
-            color: #f4edff;
-
-            font-weight: 700;
-        }}
-
-        div[data-testid="stButton"] > button:hover {{
-            border-color:
-                rgba(215, 180, 90, 0.70);
-
-            color:
-                #f1d98a;
-        }}
-
-        div[data-testid="stFormSubmitButton"] > button {{
-            border-radius: 12px;
-            font-weight: 800;
-        }}
-
-        [data-testid="stExpander"] {{
-            background:
-                rgba(12, 10, 31, 0.72);
-
-            border:
-                1px solid
-                rgba(155, 108, 255, 0.18);
-
-            border-radius: 15px;
-        }}
-
-        [data-testid="stDataFrame"] {{
-            border-radius: 14px;
-        }}
-
-        .page-banner-fallback {
-            border: 1px solid rgba(215, 180, 90, 0.22);
-            border-radius: 22px;
-            padding: 2rem;
-            margin-bottom: 1.25rem;
-            background: linear-gradient(135deg, rgba(15,10,38,.94), rgba(5,5,18,.94));
-            box-shadow: 0 18px 50px rgba(0,0,0,.25);
+    @media (max-width: 768px) {
+        .block-container {
+            padding-left: 1rem;
+            padding-right: 1rem;
         }
+    }
 
-        .page-banner-eyebrow {
-            color: #d7b45a;
-            font-size: .78rem;
-            letter-spacing: .16em;
-            font-weight: 800;
-        }
+    </style>
+    """
 
-        .page-banner-title {
-            color: #f6f3ff;
-            font-size: 2rem;
-            font-weight: 800;
-            margin-top: .45rem;
-        }
-
-        .page-banner-subtitle {
-            color: #c8c0d9;
-            margin-top: .45rem;
-        }
-
-        .hero-spacer {{
-            height: 10px;
-        }}
-
-        @media (max-width: 768px) {{
-
-            .block-container {{
-                padding-left: 1rem;
-                padding-right: 1rem;
-            }}
-
-        }}
-
-        </style>
-        """,
-        unsafe_allow_html=True,
+    css = css.replace(
+        "BACKGROUND_CSS_PLACEHOLDER",
+        background_css,
     )
 
+    st.markdown(
+        css,
+        unsafe_allow_html=True,
+    )
 
 inject_styles()
 
@@ -904,15 +802,6 @@ with st.sidebar:
 
         st.success("Database ready")
 
-        banner_count = sum(
-            1 for path in PAGE_BANNER_CANDIDATES.values()
-            if path.exists()
-        )
-        if banner_count == len(PAGE_BANNER_CANDIDATES):
-            st.success(f"Page visual system ready: {banner_count}/{len(PAGE_BANNER_CANDIDATES)} banners")
-        else:
-            st.warning(f"Page visual system: {banner_count}/{len(PAGE_BANNER_CANDIDATES)} banners")
-
     st.divider()
 
     st.caption(
@@ -931,12 +820,6 @@ if page == "Command Center":
     # --------------------------------------------------------
     # HERO
     # --------------------------------------------------------
-
-    render_page_banner(
-        "Command Center",
-        "PieroloOS Command Center",
-        "Executive visibility across the professional-service operating environment.",
-    )
 
     st.title(
         "PieroloOS"
@@ -1246,12 +1129,6 @@ if page == "Command Center":
 
 elif page == "Client Intake":
 
-    render_page_banner(
-        "Client Intake",
-        "Client Intake",
-        "Capture a structured client and business brief.",
-    )
-
     st.title(
         "Client Intake"
     )
@@ -1434,12 +1311,6 @@ elif page == "Client Intake":
 # ============================================================
 
 elif page == "Business Profile":
-
-    render_page_banner(
-        "Business Profile",
-        "Business Profile",
-        "Build a decision-ready commercial and strategic profile.",
-    )
 
     st.title(
         "Business Profile"
@@ -1634,12 +1505,6 @@ elif page == "Business Profile":
 
 elif page == "Jurisdiction Lens":
 
-    render_page_banner(
-        "Jurisdiction Lens",
-        "Jurisdiction Lens",
-        "Structured jurisdiction intelligence for business decisions.",
-    )
-
     st.title(
         "Jurisdiction Lens"
     )
@@ -1819,12 +1684,6 @@ elif page == "Jurisdiction Lens":
 # ============================================================
 
 elif page == "Formation Roadmap":
-
-    render_page_banner(
-        "Formation Roadmap",
-        "Formation Roadmap",
-        "Translate business intent into an executable formation sequence.",
-    )
 
     st.title(
         "Formation Roadmap"
@@ -2036,12 +1895,6 @@ elif page == "Formation Roadmap":
 
 elif page == "Compliance":
 
-    render_page_banner(
-        "Compliance",
-        "Compliance Control",
-        "Keep recurring corporate and operational obligations visible.",
-    )
-
     st.title(
         "Compliance Checklist"
     )
@@ -2108,12 +1961,6 @@ elif page == "Compliance":
 # ============================================================
 
 elif page == "Report Generator":
-
-    render_page_banner(
-        "Report Generator",
-        "Report Generator",
-        "Turn structured client information into professional outputs.",
-    )
 
     st.title(
         "Report Generator"
@@ -2327,12 +2174,6 @@ This report is generated by PieroloOS as a decision-support and professional-ser
 # ============================================================
 
 elif page == "Engagement Records":
-
-    render_page_banner(
-        "Engagement Records",
-        "Engagement Control",
-        "Track client matters, actions, status and operational history.",
-    )
 
     st.title(
         "Engagement Records"
@@ -2577,4 +2418,4 @@ st.caption(
     "Decision-support prototype. Verify legal, tax, regulatory, "
     "banking, and compliance matters with appropriate professionals "
     "and official authorities."
-    )
+)
