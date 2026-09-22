@@ -146,7 +146,13 @@ PAGE_BANNER_WIDTH = 1600
 #
 
 def render_critical_boot_logo() -> None:
-    """Render the logo immediately, before slow application initialisation."""
+    """
+    Boot-only identity animation.
+
+    The official PieroloCorp logo is embedded directly into the central
+    cosmic/orbital boot environment. This effect exists only during boot;
+    the normal application environment is unchanged.
+    """
 
     if st.session_state.get("pieroloos_boot_seen", False):
         return
@@ -155,34 +161,36 @@ def render_critical_boot_logo() -> None:
 
     if LOGO_EXISTS:
         logo_uri = load_image_data_uri(str(LOGO_PATH))
-        logo_markup = (
-            f"""
-            <div class="pieroloos-critical-logo-frame">
-                <img
-                    class="pieroloos-critical-logo"
-                    src="{logo_uri}"
-                    alt="PieroloCorp International LLC"
-                />
-            </div>
+        if logo_uri:
+            logo_markup = f"""
+                <div class="pieroloos-orbit-logo">
+                    <div class="pieroloos-orbit-logo-halo"></div>
+                    <img
+                        src="{logo_uri}"
+                        alt="PieroloCorp International LLC official logo"
+                    />
+                </div>
             """
-            if logo_uri
-            else
+        else:
+            logo_markup = """
+                <div class="pieroloos-orbit-logo pieroloos-orbit-logo-fallback">
+                    <span>PIEROLOOS</span>
+                </div>
             """
-            <div class="pieroloos-critical-logo-fallback">
-                PIEROLOOS
-            </div>
-            """
-        )
     else:
         logo_markup = """
-        <div class="pieroloos-critical-logo-fallback">
-            PIEROLOOS
-        </div>
+            <div class="pieroloos-orbit-logo pieroloos-orbit-logo-fallback">
+                <span>PIEROLOOS</span>
+            </div>
         """
 
     st.markdown(
         f"""
         <style>
+        /* ====================================================
+           BOOT-ONLY COSMIC IDENTITY
+           ==================================================== */
+
         .pieroloos-critical-boot {{
             position: fixed;
             inset: 0;
@@ -191,6 +199,7 @@ def render_critical_boot_logo() -> None:
             align-items: center;
             justify-content: center;
             overflow: hidden;
+            pointer-events: none;
             background:
                 radial-gradient(
                     circle at 50% 50%,
@@ -199,8 +208,8 @@ def render_critical_boot_logo() -> None:
                 ),
                 radial-gradient(
                     circle at 50% 50%,
-                    rgba(98,217,255,0.07),
-                    transparent 40%
+                    rgba(98,217,255,0.09),
+                    transparent 43%
                 ),
                 linear-gradient(
                     135deg,
@@ -208,55 +217,87 @@ def render_critical_boot_logo() -> None:
                     #08051c 48%,
                     #03030d 100%
                 );
-            pointer-events: none;
             animation:
                 pieroloos-critical-boot-exit
-                800ms
+                700ms
                 cubic-bezier(.22,.61,.36,1)
-                7200ms
+                3200ms
                 forwards;
-        }}
-
-        .pieroloos-critical-boot::before {{
-            content: "";
-            position: absolute;
-            width: min(520px, 92vw);
-            height: min(520px, 92vw);
-            border: 1px solid rgba(155,108,255,0.16);
-            border-radius: 50%;
-            box-shadow:
-                0 0 80px rgba(155,108,255,0.10),
-                inset 0 0 70px rgba(98,217,255,0.035);
-            animation: pieroloos-critical-orbit 7s linear infinite;
-        }}
-
-        .pieroloos-critical-boot::after {{
-            content: "";
-            position: absolute;
-            width: min(330px, 66vw);
-            height: min(330px, 66vw);
-            border: 1px solid rgba(215,180,90,0.18);
-            border-radius: 50%;
-            transform: rotate(22deg) scaleX(1.55);
-            box-shadow: 0 0 38px rgba(215,180,90,0.055);
-            animation: pieroloos-critical-orbit-reverse 5s linear infinite;
         }}
 
         .pieroloos-critical-core {{
             position: relative;
-            z-index: 3;
-            width: min(250px, 62vw);
-            height: min(250px, 62vw);
+            width: min(360px, 78vw);
+            height: min(360px, 78vw);
             display: flex;
             align-items: center;
             justify-content: center;
         }}
 
-        .pieroloos-critical-logo-frame {{
+        /* Main circular orbital track. */
+        .pieroloos-critical-core::before {{
+            content: "";
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 1px solid rgba(155,108,255,0.34);
+            border-radius: 50%;
+            box-shadow:
+                0 0 70px rgba(155,108,255,0.13),
+                inset 0 0 65px rgba(98,217,255,0.035);
+            animation: pieroloos-orbit-spin 8s linear infinite;
+        }}
+
+        /* Tilted outer orbit. */
+        .pieroloos-critical-core::after {{
+            content: "";
+            position: absolute;
+            width: 92%;
+            height: 46%;
+            border: 1px solid rgba(215,180,90,0.30);
+            border-radius: 50%;
+            transform: rotate(-24deg);
+            box-shadow:
+                0 0 36px rgba(215,180,90,0.08);
+            animation: pieroloos-orbit-tilt 5.5s linear infinite reverse;
+        }}
+
+        /* Secondary orbit track. */
+        .pieroloos-critical-boot::before {{
+            content: "";
+            position: absolute;
+            width: min(520px, 94vw);
+            height: min(520px, 94vw);
+            border: 1px solid rgba(98,217,255,0.11);
+            border-radius: 50%;
+            box-shadow:
+                0 0 90px rgba(98,217,255,0.05),
+                inset 0 0 90px rgba(155,108,255,0.035);
+            animation: pieroloos-orbit-spin-reverse 13s linear infinite;
+        }}
+
+        /* Distant orbit creates depth without touching the app UI. */
+        .pieroloos-critical-boot::after {{
+            content: "";
+            position: absolute;
+            width: min(760px, 122vw);
+            height: min(300px, 48vw);
+            border: 1px solid rgba(215,180,90,0.10);
+            border-radius: 50%;
+            transform: rotate(18deg);
+            box-shadow: 0 0 60px rgba(215,180,90,0.035);
+            animation: pieroloos-distant-orbit 10s linear infinite;
+        }}
+
+        /* ====================================================
+           OFFICIAL LOGO EMBEDDED INTO THE ORBITAL CORE
+           ==================================================== */
+
+        .pieroloos-orbit-logo {{
             position: relative;
-            z-index: 4;
-            width: min(168px, 43vw);
-            height: min(168px, 43vw);
+            z-index: 8;
+            width: min(148px, 34vw);
+            height: min(148px, 34vw);
             border-radius: 50%;
             overflow: hidden;
             display: flex;
@@ -264,31 +305,53 @@ def render_critical_boot_logo() -> None:
             justify-content: center;
             background:
                 radial-gradient(
-                    circle at 35% 30%,
-                    rgba(255,255,255,0.10),
-                    rgba(12,8,34,0.92) 62%
+                    circle at 35% 28%,
+                    rgba(255,255,255,0.12),
+                    rgba(10,7,30,0.94) 68%
                 );
-            border: 2px solid rgba(244,220,145,0.72);
+            border: 2px solid rgba(244,220,145,0.82);
             box-shadow:
-                0 0 0 6px rgba(155,108,255,0.055),
-                0 0 30px rgba(215,180,90,0.24),
-                0 0 70px rgba(155,108,255,0.22),
-                inset 0 0 26px rgba(98,217,255,0.08);
+                0 0 0 7px rgba(155,108,255,0.055),
+                0 0 32px rgba(215,180,90,0.28),
+                0 0 82px rgba(155,108,255,0.26),
+                inset 0 0 30px rgba(98,217,255,0.09);
             animation:
-                pieroloos-critical-logo-in 650ms ease-out both,
-                pieroloos-critical-frame-advert 2.8s ease-in-out 650ms infinite;
+                pieroloos-logo-arrive 620ms ease-out both,
+                pieroloos-logo-pulse 2.4s ease-in-out 650ms infinite;
         }}
 
-        .pieroloos-critical-logo-frame::before {{
+        .pieroloos-orbit-logo::before {{
             content: "";
             position: absolute;
-            inset: 6px;
-            border: 1px solid rgba(98,217,255,0.32);
+            inset: 7px;
+            z-index: 2;
+            border: 1px solid rgba(98,217,255,0.34);
             border-radius: 50%;
             pointer-events: none;
         }}
 
-        .pieroloos-critical-logo {{
+        .pieroloos-orbit-logo::after {{
+            content: "";
+            position: absolute;
+            z-index: 4;
+            top: -35%;
+            left: -85%;
+            width: 42%;
+            height: 170%;
+            transform: rotate(22deg);
+            background:
+                linear-gradient(
+                    90deg,
+                    transparent,
+                    rgba(255,255,255,0.30),
+                    transparent
+                );
+            filter: blur(2px);
+            pointer-events: none;
+            animation: pieroloos-logo-shine 2.8s ease-in-out 850ms infinite;
+        }}
+
+        .pieroloos-orbit-logo img {{
             position: relative;
             z-index: 1;
             width: 100%;
@@ -298,73 +361,97 @@ def render_critical_boot_logo() -> None:
             object-position: center;
             border-radius: 50%;
             clip-path: circle(50% at 50% 50%);
-            transform: scale(1.02);
-            animation: pieroloos-critical-logo-motion 3.2s ease-in-out 650ms infinite;
-            will-change: transform, filter;
+            transform: scale(1.015);
         }}
 
-        .pieroloos-critical-logo-frame::after {{
-            content: "";
+        .pieroloos-orbit-logo-halo {{
             position: absolute;
-            z-index: 2;
-            top: -20%;
-            left: -75%;
-            width: 45%;
-            height: 140%;
-            transform: rotate(22deg);
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.26), transparent);
-            filter: blur(2px);
-            pointer-events: none;
-            animation: pieroloos-critical-logo-shine 3.6s ease-in-out 900ms infinite;
+            z-index: 0;
+            width: 76%;
+            height: 76%;
+            border-radius: 50%;
+            background:
+                radial-gradient(
+                    circle,
+                    rgba(155,108,255,0.18),
+                    rgba(98,217,255,0.06) 48%,
+                    transparent 72%
+                );
+            filter: blur(10px);
+            animation: pieroloos-halo-breathe 2.6s ease-in-out infinite;
         }}
 
-        .pieroloos-critical-logo-fallback {{
-            position: relative;
-            z-index: 4;
-            width: min(168px, 43vw);
-            height: min(168px, 43vw);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-sizing: border-box;
-            border: 2px solid rgba(244,220,145,0.72);
-            background: rgba(12,8,34,0.94);
+        .pieroloos-orbit-logo-fallback {{
             color: #f4dc91;
-            font-size: clamp(1rem, 4vw, 1.65rem);
+            letter-spacing: 0.13em;
+            font-size: clamp(0.85rem, 3.6vw, 1.25rem);
             font-weight: 900;
-            letter-spacing: 0.14em;
             text-align: center;
+        }}
+
+        /* Small luminous orbital nodes. */
+        .pieroloos-critical-core .orbit-node {{
+            position: absolute;
+            z-index: 6;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #f4dc91;
             box-shadow:
-                0 0 32px rgba(215,180,90,0.20),
-                0 0 70px rgba(155,108,255,0.20);
+                0 0 10px rgba(244,220,145,0.80),
+                0 0 24px rgba(155,108,255,0.55);
+        }}
+
+        .pieroloos-critical-core .orbit-node-a {{
+            top: 7%;
+            left: 22%;
+            animation: pieroloos-node-a 4.5s linear infinite;
+        }}
+
+        .pieroloos-critical-core .orbit-node-b {{
+            right: 5%;
+            top: 48%;
+            width: 5px;
+            height: 5px;
+            background: #62d9ff;
+            animation: pieroloos-node-b 3.8s linear infinite;
+        }}
+
+        .pieroloos-critical-core .orbit-node-c {{
+            left: 18%;
+            bottom: 8%;
+            width: 5px;
+            height: 5px;
+            background: #9b6cff;
+            animation: pieroloos-node-c 5.2s linear infinite;
         }}
 
         .pieroloos-critical-label {{
             position: absolute;
-            z-index: 5;
+            z-index: 10;
             left: 50%;
-            bottom: -5.25rem;
+            bottom: -3.95rem;
             transform: translateX(-50%);
             white-space: nowrap;
-            color: rgba(230,221,248,0.78);
-            font-size: 0.60rem;
+            color: rgba(230,221,248,0.82);
+            font-size: 0.58rem;
             font-weight: 750;
-            letter-spacing: 0.28em;
+            letter-spacing: 0.26em;
             text-transform: uppercase;
+            text-align: center;
         }}
 
         .pieroloos-critical-progress {{
             position: absolute;
-            z-index: 5;
+            z-index: 10;
             left: 50%;
-            bottom: -6.45rem;
-            width: min(180px, 48vw);
+            bottom: -5.15rem;
+            width: min(190px, 48vw);
             height: 2px;
             transform: translateX(-50%);
             overflow: hidden;
             border-radius: 99px;
-            background: rgba(155,108,255,0.14);
+            background: rgba(155,108,255,0.15);
         }}
 
         .pieroloos-critical-progress::after {{
@@ -373,25 +460,26 @@ def render_critical_boot_logo() -> None:
             width: 42%;
             height: 100%;
             border-radius: inherit;
-            background: linear-gradient(
-                90deg,
-                #62d9ff,
-                #9b6cff,
-                #f4dc91
-            );
-            box-shadow: 0 0 12px rgba(155,108,255,0.42);
+            background:
+                linear-gradient(
+                    90deg,
+                    #62d9ff,
+                    #9b6cff,
+                    #f4dc91
+                );
+            box-shadow: 0 0 12px rgba(155,108,255,0.45);
             animation:
                 pieroloos-critical-progress
-                7600ms
+                3200ms
                 linear
-                150ms
+                100ms
                 forwards;
         }}
 
-        @keyframes pieroloos-critical-logo-in {{
+        @keyframes pieroloos-logo-arrive {{
             from {{
                 opacity: 0;
-                transform: scale(0.72);
+                transform: scale(0.68);
             }}
             to {{
                 opacity: 1;
@@ -399,79 +487,75 @@ def render_critical_boot_logo() -> None:
             }}
         }}
 
-        @keyframes pieroloos-critical-frame-advert {{
+        @keyframes pieroloos-logo-pulse {{
             0%, 100% {{
-                transform: translateY(0) scale(1);
+                transform: scale(1);
                 box-shadow:
-                    0 0 0 6px rgba(155,108,255,0.055),
-                    0 0 30px rgba(215,180,90,0.24),
-                    0 0 70px rgba(155,108,255,0.22),
-                    inset 0 0 26px rgba(98,217,255,0.08);
+                    0 0 0 7px rgba(155,108,255,0.055),
+                    0 0 32px rgba(215,180,90,0.28),
+                    0 0 82px rgba(155,108,255,0.26),
+                    inset 0 0 30px rgba(98,217,255,0.09);
             }}
             50% {{
-                transform: translateY(-7px) scale(1.035);
+                transform: scale(1.045);
                 box-shadow:
-                    0 0 0 10px rgba(155,108,255,0.075),
-                    0 0 44px rgba(215,180,90,0.34),
-                    0 0 95px rgba(155,108,255,0.30),
-                    inset 0 0 34px rgba(98,217,255,0.13);
+                    0 0 0 11px rgba(155,108,255,0.075),
+                    0 0 46px rgba(215,180,90,0.38),
+                    0 0 108px rgba(155,108,255,0.34),
+                    inset 0 0 38px rgba(98,217,255,0.14);
             }}
         }}
 
-        @keyframes pieroloos-critical-logo-motion {{
-            0%, 100% {{
-                transform: scale(1.02) rotate(-1.2deg);
-                filter: brightness(0.98) saturate(1);
-            }}
-            50% {{
-                transform: scale(1.055) rotate(1.2deg);
-                filter: brightness(1.10) saturate(1.08);
-            }}
+        @keyframes pieroloos-halo-breathe {{
+            0%, 100% {{ opacity: 0.42; transform: scale(0.92); }}
+            50% {{ opacity: 0.92; transform: scale(1.08); }}
         }}
 
-        @keyframes pieroloos-critical-logo-shine {{
-            0% {{
-                left: -75%;
-                opacity: 0;
-            }}
-            18% {{
-                opacity: 0.85;
-            }}
-            42% {{
-                left: 135%;
-                opacity: 0;
-            }}
-            100% {{
-                left: 135%;
-                opacity: 0;
-            }}
+        @keyframes pieroloos-logo-shine {{
+            0% {{ left: -85%; opacity: 0; }}
+            18% {{ opacity: 0.82; }}
+            42% {{ left: 140%; opacity: 0; }}
+            100% {{ left: 140%; opacity: 0; }}
         }}
 
-        @keyframes pieroloos-critical-orbit {{
-            from {{
-                transform: rotate(0deg);
-            }}
-            to {{
-                transform: rotate(360deg);
-            }}
+        @keyframes pieroloos-orbit-spin {{
+            from {{ transform: rotate(0deg); }}
+            to {{ transform: rotate(360deg); }}
         }}
 
-        @keyframes pieroloos-critical-orbit-reverse {{
-            from {{
-                transform: rotate(22deg) scaleX(1.55);
-            }}
-            to {{
-                transform: rotate(-338deg) scaleX(1.55);
-            }}
+        @keyframes pieroloos-orbit-spin-reverse {{
+            from {{ transform: rotate(0deg); }}
+            to {{ transform: rotate(-360deg); }}
+        }}
+
+        @keyframes pieroloos-orbit-tilt {{
+            from {{ transform: rotate(-24deg); }}
+            to {{ transform: rotate(336deg); }}
+        }}
+
+        @keyframes pieroloos-distant-orbit {{
+            from {{ transform: rotate(18deg); }}
+            to {{ transform: rotate(378deg); }}
+        }}
+
+        @keyframes pieroloos-node-a {{
+            from {{ transform: rotate(0deg) translateX(150px) rotate(0deg); }}
+            to {{ transform: rotate(360deg) translateX(150px) rotate(-360deg); }}
+        }}
+
+        @keyframes pieroloos-node-b {{
+            from {{ transform: rotate(180deg) translateX(142px) rotate(-180deg); }}
+            to {{ transform: rotate(540deg) translateX(142px) rotate(-540deg); }}
+        }}
+
+        @keyframes pieroloos-node-c {{
+            from {{ transform: rotate(300deg) translateX(135px) rotate(-300deg); }}
+            to {{ transform: rotate(660deg) translateX(135px) rotate(-660deg); }}
         }}
 
         @keyframes pieroloos-critical-progress {{
-            from {{
-                transform: translateX(-120%);
-            }}
-            to {{
-                transform: translateX(280%);
-            }}
+            from {{ transform: translateX(-120%); }}
+            to {{ transform: translateX(280%); }}
         }}
 
         @keyframes pieroloos-critical-boot-exit {{
@@ -479,7 +563,7 @@ def render_critical_boot_logo() -> None:
                 opacity: 1;
                 visibility: visible;
             }}
-            90% {{
+            91% {{
                 opacity: 1;
                 visibility: visible;
             }}
@@ -489,18 +573,43 @@ def render_critical_boot_logo() -> None:
             }}
         }}
 
+        @media (max-width: 768px) {{
+            .pieroloos-critical-core {{
+                width: min(330px, 80vw);
+                height: min(330px, 80vw);
+            }}
+
+            .pieroloos-orbit-logo {{
+                width: min(132px, 34vw);
+                height: min(132px, 34vw);
+            }}
+
+            .pieroloos-critical-label {{
+                font-size: 0.50rem;
+                letter-spacing: 0.19em;
+                bottom: -3.65rem;
+            }}
+
+            .pieroloos-critical-progress {{
+                bottom: -4.75rem;
+            }}
+        }}
+
         @media (prefers-reduced-motion: reduce) {{
             .pieroloos-critical-boot {{
                 animation-duration: 1ms !important;
-                animation-delay: 650ms !important;
+                animation-delay: 900ms !important;
             }}
 
             .pieroloos-critical-boot::before,
             .pieroloos-critical-boot::after,
-            .pieroloos-critical-logo-frame,
-            .pieroloos-critical-logo,
-            .pieroloos-critical-logo-frame::after,
-            .pieroloos-critical-progress::after {{
+            .pieroloos-critical-core::before,
+            .pieroloos-critical-core::after,
+            .pieroloos-orbit-logo,
+            .pieroloos-orbit-logo-halo,
+            .pieroloos-orbit-logo::after,
+            .pieroloos-critical-progress::after,
+            .pieroloos-critical-core .orbit-node {{
                 animation: none !important;
             }}
         }}
@@ -508,13 +617,19 @@ def render_critical_boot_logo() -> None:
 
         <div
             class="pieroloos-critical-boot"
-            aria-label="PieroloCorp International LLC initializing"
+            aria-label="PieroloCorp International LLC official identity initializing"
         >
             <div class="pieroloos-critical-core">
                 {logo_markup}
+
+                <div class="orbit-node orbit-node-a"></div>
+                <div class="orbit-node orbit-node-b"></div>
+                <div class="orbit-node orbit-node-c"></div>
+
                 <div class="pieroloos-critical-label">
                     PIEROLOOS · OFFICIAL IDENTITY · INITIALIZING
                 </div>
+
                 <div class="pieroloos-critical-progress"></div>
             </div>
         </div>
