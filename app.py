@@ -211,9 +211,9 @@ def render_critical_boot_logo() -> None:
             pointer-events: none;
             animation:
                 pieroloos-critical-boot-exit
-                850ms
+                800ms
                 cubic-bezier(.22,.61,.36,1)
-                1200ms
+                7200ms
                 forwards;
         }}
 
@@ -274,7 +274,9 @@ def render_critical_boot_logo() -> None:
                 0 0 30px rgba(215,180,90,0.24),
                 0 0 70px rgba(155,108,255,0.22),
                 inset 0 0 26px rgba(98,217,255,0.08);
-            animation: pieroloos-critical-logo-in 650ms ease-out both;
+            animation:
+                pieroloos-critical-logo-in 650ms ease-out both,
+                pieroloos-critical-frame-advert 2.8s ease-in-out 650ms infinite;
         }}
 
         .pieroloos-critical-logo-frame::before {{
@@ -287,6 +289,8 @@ def render_critical_boot_logo() -> None:
         }}
 
         .pieroloos-critical-logo {{
+            position: relative;
+            z-index: 1;
             width: 100%;
             height: 100%;
             display: block;
@@ -295,6 +299,23 @@ def render_critical_boot_logo() -> None:
             border-radius: 50%;
             clip-path: circle(50% at 50% 50%);
             transform: scale(1.02);
+            animation: pieroloos-critical-logo-motion 3.2s ease-in-out 650ms infinite;
+            will-change: transform, filter;
+        }}
+
+        .pieroloos-critical-logo-frame::after {{
+            content: "";
+            position: absolute;
+            z-index: 2;
+            top: -20%;
+            left: -75%;
+            width: 45%;
+            height: 140%;
+            transform: rotate(22deg);
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.26), transparent);
+            filter: blur(2px);
+            pointer-events: none;
+            animation: pieroloos-critical-logo-shine 3.6s ease-in-out 900ms infinite;
         }}
 
         .pieroloos-critical-logo-fallback {{
@@ -361,8 +382,9 @@ def render_critical_boot_logo() -> None:
             box-shadow: 0 0 12px rgba(155,108,255,0.42);
             animation:
                 pieroloos-critical-progress
-                1200ms
-                ease-in-out
+                7600ms
+                linear
+                150ms
                 forwards;
         }}
 
@@ -374,6 +396,54 @@ def render_critical_boot_logo() -> None:
             to {{
                 opacity: 1;
                 transform: scale(1);
+            }}
+        }}
+
+        @keyframes pieroloos-critical-frame-advert {{
+            0%, 100% {{
+                transform: translateY(0) scale(1);
+                box-shadow:
+                    0 0 0 6px rgba(155,108,255,0.055),
+                    0 0 30px rgba(215,180,90,0.24),
+                    0 0 70px rgba(155,108,255,0.22),
+                    inset 0 0 26px rgba(98,217,255,0.08);
+            }}
+            50% {{
+                transform: translateY(-7px) scale(1.035);
+                box-shadow:
+                    0 0 0 10px rgba(155,108,255,0.075),
+                    0 0 44px rgba(215,180,90,0.34),
+                    0 0 95px rgba(155,108,255,0.30),
+                    inset 0 0 34px rgba(98,217,255,0.13);
+            }}
+        }}
+
+        @keyframes pieroloos-critical-logo-motion {{
+            0%, 100% {{
+                transform: scale(1.02) rotate(-1.2deg);
+                filter: brightness(0.98) saturate(1);
+            }}
+            50% {{
+                transform: scale(1.055) rotate(1.2deg);
+                filter: brightness(1.10) saturate(1.08);
+            }}
+        }}
+
+        @keyframes pieroloos-critical-logo-shine {{
+            0% {{
+                left: -75%;
+                opacity: 0;
+            }}
+            18% {{
+                opacity: 0.85;
+            }}
+            42% {{
+                left: 135%;
+                opacity: 0;
+            }}
+            100% {{
+                left: 135%;
+                opacity: 0;
             }}
         }}
 
@@ -409,7 +479,7 @@ def render_critical_boot_logo() -> None:
                 opacity: 1;
                 visibility: visible;
             }}
-            72% {{
+            90% {{
                 opacity: 1;
                 visibility: visible;
             }}
@@ -428,6 +498,8 @@ def render_critical_boot_logo() -> None:
             .pieroloos-critical-boot::before,
             .pieroloos-critical-boot::after,
             .pieroloos-critical-logo-frame,
+            .pieroloos-critical-logo,
+            .pieroloos-critical-logo-frame::after,
             .pieroloos-critical-progress::after {{
                 animation: none !important;
             }}
@@ -441,7 +513,7 @@ def render_critical_boot_logo() -> None:
             <div class="pieroloos-critical-core">
                 {logo_markup}
                 <div class="pieroloos-critical-label">
-                    PIEROLOOS · INITIALIZING
+                    PIEROLOOS · OFFICIAL IDENTITY · INITIALIZING
                 </div>
                 <div class="pieroloos-critical-progress"></div>
             </div>
