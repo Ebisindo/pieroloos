@@ -691,45 +691,188 @@ def render_page_banner(page_name: str) -> None:
 # ============================================================
 
 def inject_styles() -> None:
-    """Inject the responsive PieroloOS visual system without f-string CSS errors."""
+    """Inject the full PieroloOS cosmic visual environment.
+
+    The existing page structure remains unchanged. This layer extends the
+    visual system from the static page banners to the entire application:
+    deep-space gradients, subtle star fields, orbital rings, global glow,
+    translucent work surfaces, and responsive behavior.
+    """
     if BACKGROUND_URI:
         background_css = (
             "background-image: "
-            "linear-gradient(rgba(5,5,18,0.78), rgba(5,5,18,0.92)), "
+            "linear-gradient(rgba(4,5,20,0.62), rgba(5,4,22,0.78)), "
             f"url('{BACKGROUND_URI}');"
         )
     else:
         background_css = (
-            "background: radial-gradient(circle at 80% 10%, "
-            "rgba(155,108,255,0.20), transparent 30%), "
-            "linear-gradient(135deg, #050512, #110a28, #050512);"
+            "background-image: "
+            "radial-gradient(circle at 15% 15%, rgba(155,108,255,0.24), transparent 28%), "
+            "radial-gradient(circle at 82% 18%, rgba(68,164,255,0.18), transparent 25%), "
+            "radial-gradient(circle at 50% 90%, rgba(215,180,90,0.12), transparent 30%), "
+            "linear-gradient(135deg, #03030d, #0b0922 45%, #03030d);"
         )
 
     css = """
     <style>
     :root {
         --gold: #d7b45a;
-        --gold-light: #f1d98a;
+        --gold-light: #f4dc91;
         --violet: #9b6cff;
-        --violet-light: #c5a7ff;
-        --navy: #050512;
-        --panel: rgba(12, 10, 31, 0.82);
+        --violet-light: #cbb5ff;
+        --cyan: #62d9ff;
+        --blue: #4e8cff;
+        --navy: #03030d;
+        --panel: rgba(10, 8, 29, 0.68);
+        --panel-strong: rgba(8, 7, 24, 0.84);
         --border: rgba(215, 180, 90, 0.20);
         --text: #f6f3ff;
         --muted: #aaa3c2;
     }
 
+    /* ========================================================
+       GLOBAL COSMIC ENVIRONMENT
+       ======================================================== */
+
+    html, body {
+        background: #03030d !important;
+    }
+
     .stApp {
+        position: relative;
+        isolation: isolate;
+        min-height: 100vh;
         BACKGROUND_CSS_PLACEHOLDER
         background-size: cover;
         background-position: center;
         background-attachment: fixed;
         color: var(--text);
+        overflow-x: hidden;
     }
 
+    /* Deep-space colour field + stars across the entire application. */
+    .stApp::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background:
+            radial-gradient(circle at 12% 18%, rgba(155,108,255,0.22), transparent 23%),
+            radial-gradient(circle at 86% 14%, rgba(72,166,255,0.17), transparent 24%),
+            radial-gradient(circle at 68% 78%, rgba(215,180,90,0.11), transparent 22%),
+            radial-gradient(circle at 32% 92%, rgba(112,77,255,0.14), transparent 26%),
+            radial-gradient(circle at 18% 65%, rgba(0,210,255,0.07), transparent 18%),
+            radial-gradient(circle at 78% 48%, rgba(255,255,255,0.055) 0 1px, transparent 1.5px),
+            radial-gradient(circle at 24% 34%, rgba(255,255,255,0.07) 0 1px, transparent 1.6px),
+            radial-gradient(circle at 58% 24%, rgba(255,255,255,0.055) 0 1px, transparent 1.5px),
+            radial-gradient(circle at 42% 74%, rgba(255,255,255,0.06) 0 1px, transparent 1.5px),
+            linear-gradient(135deg, rgba(3,3,13,0.18), rgba(12,8,35,0.16));
+        background-size: auto, auto, auto, auto, auto, 360px 360px, 290px 290px, 420px 420px, 330px 330px, auto;
+        animation: cosmicDrift 28s ease-in-out infinite alternate;
+    }
+
+    /* Large orbital geometry creates the global-presence effect. */
+    .stApp::after {
+        content: "";
+        position: fixed;
+        width: min(1100px, 92vw);
+        height: min(1100px, 92vw);
+        left: 50%;
+        top: 48%;
+        transform: translate(-50%, -50%) rotate(-18deg);
+        border: 1px solid rgba(155,108,255,0.15);
+        border-radius: 50%;
+        box-shadow:
+            0 0 80px rgba(155,108,255,0.055),
+            inset 0 0 80px rgba(98,217,255,0.035);
+        z-index: 0;
+        pointer-events: none;
+        animation: orbitFloat 32s linear infinite;
+    }
+
+    /* Keep Streamlit's real application surfaces above the cosmic layers. */
+    .stApp > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    @keyframes cosmicDrift {
+        from { transform: scale(1); filter: saturate(0.95); }
+        to { transform: scale(1.035); filter: saturate(1.12); }
+    }
+
+    @keyframes orbitFloat {
+        from { transform: translate(-50%, -50%) rotate(-18deg); }
+        to { transform: translate(-50%, -50%) rotate(342deg); }
+    }
+
+    /* Additional orbital tracks on the main workspace. */
+    [data-testid="stAppViewContainer"]::before {
+        content: "";
+        position: fixed;
+        width: min(760px, 74vw);
+        height: min(330px, 32vw);
+        left: 50%;
+        top: 52%;
+        transform: translate(-50%, -50%) rotate(-13deg);
+        border: 1px solid rgba(98,217,255,0.12);
+        border-radius: 50%;
+        box-shadow: 0 0 45px rgba(98,217,255,0.035);
+        z-index: 0;
+        pointer-events: none;
+        animation: orbitTilt 24s linear infinite reverse;
+    }
+
+    [data-testid="stAppViewContainer"]::after {
+        content: "";
+        position: fixed;
+        width: min(500px, 55vw);
+        height: min(500px, 55vw);
+        left: 88%;
+        top: 17%;
+        transform: translate(-50%, -50%);
+        border: 1px solid rgba(215,180,90,0.11);
+        border-radius: 50%;
+        box-shadow: 0 0 65px rgba(215,180,90,0.045);
+        z-index: 0;
+        pointer-events: none;
+        animation: orbitPulse 8s ease-in-out infinite alternate;
+    }
+
+    @keyframes orbitTilt {
+        from { transform: translate(-50%, -50%) rotate(-13deg); }
+        to { transform: translate(-50%, -50%) rotate(347deg); }
+    }
+
+    @keyframes orbitPulse {
+        from { opacity: 0.42; transform: translate(-50%, -50%) scale(0.96); }
+        to { opacity: 0.9; transform: translate(-50%, -50%) scale(1.04); }
+    }
+
+    /* ========================================================
+       SIDEBAR / NAVIGATION
+       ======================================================== */
+
     [data-testid="stSidebar"] {
-        background: rgba(5, 5, 18, 0.97);
-        border-right: 1px solid rgba(215, 180, 90, 0.20);
+        background:
+            radial-gradient(circle at 50% 12%, rgba(155,108,255,0.18), transparent 30%),
+            radial-gradient(circle at 20% 82%, rgba(98,217,255,0.07), transparent 24%),
+            linear-gradient(180deg, rgba(4,4,17,0.94), rgba(8,5,25,0.97));
+        border-right: 1px solid rgba(215,180,90,0.22);
+        box-shadow: 14px 0 55px rgba(0,0,0,0.28);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+    }
+
+    [data-testid="stSidebar"]::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+            radial-gradient(circle at 78% 20%, rgba(98,217,255,0.08), transparent 18%),
+            radial-gradient(circle at 28% 65%, rgba(155,108,255,0.08), transparent 22%);
     }
 
     .block-container {
@@ -738,11 +881,101 @@ def inject_styles() -> None:
         padding-bottom: 4rem;
     }
 
-    h1 { color: var(--gold-light); }
+    /* ========================================================
+       TYPOGRAPHY
+       ======================================================== */
+
+    h1 {
+        color: var(--gold-light);
+        text-shadow: 0 0 24px rgba(215,180,90,0.12);
+    }
+
     h2 { color: #f6f0ff; }
     h3 { color: #f1eaff; }
-    p { color: #d0c9df; }
-    .stCaption { color: #9991ac; }
+    p { color: #d8d1e8; }
+    .stCaption { color: #aaa3c2; }
+
+    /* ========================================================
+       TRANSLUCENT APPLICATION SURFACES
+       ======================================================== */
+
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: linear-gradient(145deg, rgba(15,11,38,0.66), rgba(7,6,22,0.54));
+        border-color: rgba(155,108,255,0.17) !important;
+        box-shadow: 0 16px 45px rgba(0,0,0,0.16);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+    }
+
+    div[data-testid="stMetric"] {
+        background:
+            linear-gradient(145deg, rgba(18,13,43,0.76), rgba(7,7,24,0.68));
+        border: 1px solid rgba(215,180,90,0.20);
+        border-radius: 18px;
+        padding: 1rem;
+        box-shadow: 0 14px 40px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.025);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+    }
+
+    div[data-testid="stMetricLabel"] { color: #aaa3c2; }
+    div[data-testid="stMetricValue"] { color: #f1d98a; }
+
+    [data-testid="stExpander"] {
+        background: rgba(10,8,29,0.62);
+        border: 1px solid rgba(155,108,255,0.18);
+        border-radius: 15px;
+        box-shadow: 0 14px 38px rgba(0,0,0,0.14);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+    }
+
+    /* Inputs remain readable while allowing the cosmic environment to show through. */
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="textarea"] {
+        background: rgba(9,8,27,0.72) !important;
+        border-color: rgba(155,108,255,0.20) !important;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    input, textarea {
+        color: #f6f3ff !important;
+    }
+
+    /* ========================================================
+       BUTTONS / INTERACTION
+       ======================================================== */
+
+    div[data-testid="stButton"] > button,
+    div[data-testid="stFormSubmitButton"] > button {
+        border: 1px solid rgba(215,180,90,0.27);
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(20,14,47,0.88), rgba(10,8,28,0.88));
+        color: #f4edff;
+        font-weight: 700;
+        box-shadow: 0 8px 22px rgba(0,0,0,0.16);
+        transition: all 180ms ease;
+    }
+
+    div[data-testid="stButton"] > button:hover,
+    div[data-testid="stFormSubmitButton"] > button:hover {
+        border-color: rgba(215,180,90,0.72);
+        color: #f1d98a;
+        box-shadow: 0 0 24px rgba(215,180,90,0.10);
+        transform: translateY(-1px);
+    }
+
+    [data-testid="stDataFrame"] {
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.16);
+    }
+
+    /* ========================================================
+       PAGE-SPECIFIC BANNERS
+       ======================================================== */
 
     .page-banner {
         position: relative;
@@ -751,9 +984,13 @@ def inject_styles() -> None:
         margin: 0 0 1.5rem 0;
         overflow: hidden;
         border-radius: 24px;
-        border: 1px solid rgba(215, 180, 90, 0.28);
-        background: rgba(8, 7, 24, 0.90);
-        box-shadow: 0 24px 70px rgba(0,0,0,0.35);
+        border: 1px solid rgba(215,180,90,0.28);
+        background: rgba(8,7,24,0.72);
+        box-shadow:
+            0 24px 70px rgba(0,0,0,0.35),
+            0 0 55px rgba(155,108,255,0.055);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
     }
 
     .page-banner-image {
@@ -768,83 +1005,33 @@ def inject_styles() -> None:
     .page-banner-overlay {
         position: absolute;
         inset: 0;
-        background: linear-gradient(
-            90deg,
-            rgba(5,5,18,0.28) 0%,
-            rgba(5,5,18,0.06) 50%,
-            rgba(5,5,18,0.20) 100%
-        );
+        background:
+            linear-gradient(90deg, rgba(5,5,18,0.18), rgba(5,5,18,0.03) 52%, rgba(5,5,18,0.18)),
+            radial-gradient(circle at 72% 50%, rgba(155,108,255,0.08), transparent 32%);
         pointer-events: none;
     }
 
     .page-banner-fallback {
         background:
-            radial-gradient(
-                circle at 80% 20%,
-                rgba(155,108,255,0.28),
-                transparent 34%
-            ),
-            radial-gradient(
-                circle at 20% 80%,
-                rgba(215,180,90,0.12),
-                transparent 30%
-            ),
-            linear-gradient(
-                135deg,
-                #090718,
-                #17102e,
-                #050512
-            );
+            radial-gradient(circle at 80% 20%, rgba(155,108,255,0.28), transparent 34%),
+            radial-gradient(circle at 20% 80%, rgba(98,217,255,0.10), transparent 25%),
+            radial-gradient(circle at 55% 45%, rgba(215,180,90,0.10), transparent 24%),
+            linear-gradient(135deg, #090718, #17102e, #050512);
     }
 
     .page-banner-fallback-glow {
         position: absolute;
         inset: 0;
         background:
-            linear-gradient(
-                115deg,
-                transparent 0%,
-                rgba(255,255,255,0.03) 45%,
-                transparent 70%
-            );
+            radial-gradient(ellipse at center, transparent 0 32%, rgba(155,108,255,0.08) 50%, transparent 70%),
+            linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.03) 45%, transparent 70%);
+        animation: bannerGlow 7s ease-in-out infinite alternate;
     }
 
-    div[data-testid="stMetric"] {
-        background: rgba(12, 10, 31, 0.78);
-        border: 1px solid rgba(215, 180, 90, 0.18);
-        border-radius: 18px;
-        padding: 1rem;
-        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.20);
+    @keyframes bannerGlow {
+        from { opacity: 0.55; transform: translateX(-1%); }
+        to { opacity: 1; transform: translateX(1%); }
     }
-
-    div[data-testid="stMetricLabel"] { color: #aaa3c2; }
-    div[data-testid="stMetricValue"] { color: #f1d98a; }
-
-    div[data-testid="stButton"] > button {
-        border: 1px solid rgba(215, 180, 90, 0.25);
-        border-radius: 12px;
-        background: rgba(15, 11, 35, 0.90);
-        color: #f4edff;
-        font-weight: 700;
-    }
-
-    div[data-testid="stButton"] > button:hover {
-        border-color: rgba(215, 180, 90, 0.70);
-        color: #f1d98a;
-    }
-
-    div[data-testid="stFormSubmitButton"] > button {
-        border-radius: 12px;
-        font-weight: 800;
-    }
-
-    [data-testid="stExpander"] {
-        background: rgba(12, 10, 31, 0.72);
-        border: 1px solid rgba(155, 108, 255, 0.18);
-        border-radius: 15px;
-    }
-
-    [data-testid="stDataFrame"] { border-radius: 14px; }
 
     .asset-status {
         padding: 0.75rem 0.9rem;
@@ -855,10 +1042,45 @@ def inject_styles() -> None:
         font-size: 0.78rem;
     }
 
+    /* ========================================================
+       MOBILE / TABLET
+       ======================================================== */
+
     @media (max-width: 768px) {
-        .block-container { padding-left: 0.85rem; padding-right: 0.85rem; }
-        .page-banner { min-height: 220px; border-radius: 18px; }
-        .page-banner-overlay { background: linear-gradient(90deg, rgba(5,5,18,0.20), rgba(5,5,18,0.05)); }
+        .block-container {
+            padding-left: 0.85rem;
+            padding-right: 0.85rem;
+        }
+
+        .page-banner {
+            min-height: 220px;
+            border-radius: 18px;
+        }
+
+        .page-banner-overlay {
+            background: linear-gradient(90deg, rgba(5,5,18,0.16), rgba(5,5,18,0.04));
+        }
+
+        .stApp::after {
+            width: 720px;
+            height: 720px;
+            top: 44%;
+        }
+
+        [data-testid="stAppViewContainer"]::before {
+            width: 520px;
+            height: 230px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .stApp::before,
+        .stApp::after,
+        [data-testid="stAppViewContainer"]::before,
+        [data-testid="stAppViewContainer"]::after,
+        .page-banner-fallback-glow {
+            animation: none !important;
+        }
     }
     </style>
     """
@@ -867,6 +1089,10 @@ def inject_styles() -> None:
         css.replace("BACKGROUND_CSS_PLACEHOLDER", background_css),
         unsafe_allow_html=True,
     )
+
+
+# Apply the global visual environment before rendering any application UI.
+inject_styles()
 
 
 # ============================================================
