@@ -127,520 +127,7 @@ PAGE_ASSET_STATUS = {
 }
 
 
-PAGE_BANNER_WIDTH = 1600  # artwork reference width; responsive frame is CSS-driven
-
-
-# ============================================================
-# 2A. CRITICAL BOOT LOGO — RENDER BEFORE DATABASE INITIALISATION
-# ============================================================
-#
-# This is intentionally placed before SQLite migration/start-up work.
-# Streamlit can send these early UI deltas while the remaining Python
-# application continues initialising. The logo therefore becomes the
-# first meaningful visual element instead of waiting for the database
-# layer to finish.
-#
-# The full visual system is injected later by inject_styles().
-# These styles are deliberately self-contained so the boot experience
-# does not depend on the later application stylesheet.
-#
-
-def render_critical_boot_logo() -> None:
-    """
-    Boot-only identity animation.
-
-    The official PieroloCorp logo is embedded directly into the central
-    cosmic/orbital boot environment. This effect exists only during boot;
-    the normal application environment is unchanged.
-    """
-
-    if st.session_state.get("pieroloos_boot_seen", False):
-        return
-
-    st.session_state["pieroloos_boot_seen"] = True
-
-    if LOGO_EXISTS:
-        logo_uri = load_image_data_uri(str(LOGO_PATH))
-        if logo_uri:
-            logo_markup = f"""
-                <div class="pieroloos-orbit-logo">
-                    <div class="pieroloos-orbit-logo-halo"></div>
-                    <img
-                        src="{logo_uri}"
-                        alt="PieroloCorp International LLC official logo"
-                    />
-                </div>
-            """
-        else:
-            logo_markup = """
-                <div class="pieroloos-orbit-logo pieroloos-orbit-logo-fallback">
-                    <span>PIEROLOOS</span>
-                </div>
-            """
-    else:
-        logo_markup = """
-            <div class="pieroloos-orbit-logo pieroloos-orbit-logo-fallback">
-                <span>PIEROLOOS</span>
-            </div>
-        """
-
-    st.markdown(
-        f"""
-        <style>
-        /* ====================================================
-           BOOT-ONLY COSMIC IDENTITY
-           ==================================================== */
-
-        .pieroloos-critical-boot {{
-            position: fixed;
-            inset: 0;
-            z-index: 2147483647;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            pointer-events: none;
-            background:
-                radial-gradient(
-                    circle at 50% 50%,
-                    rgba(155,108,255,0.20),
-                    transparent 24%
-                ),
-                radial-gradient(
-                    circle at 50% 50%,
-                    rgba(98,217,255,0.09),
-                    transparent 43%
-                ),
-                linear-gradient(
-                    135deg,
-                    #02020b 0%,
-                    #08051c 48%,
-                    #03030d 100%
-                );
-            animation:
-                pieroloos-critical-boot-exit
-                700ms
-                cubic-bezier(.22,.61,.36,1)
-                3200ms
-                forwards;
-        }}
-
-        .pieroloos-critical-core {{
-            position: relative;
-            width: min(360px, 78vw);
-            height: min(360px, 78vw);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }}
-
-        /* Main circular orbital track. */
-        .pieroloos-critical-core::before {{
-            content: "";
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border: 1px solid rgba(155,108,255,0.34);
-            border-radius: 50%;
-            box-shadow:
-                0 0 70px rgba(155,108,255,0.13),
-                inset 0 0 65px rgba(98,217,255,0.035);
-            animation: pieroloos-orbit-spin 8s linear infinite;
-        }}
-
-        /* Tilted outer orbit. */
-        .pieroloos-critical-core::after {{
-            content: "";
-            position: absolute;
-            width: 92%;
-            height: 46%;
-            border: 1px solid rgba(215,180,90,0.30);
-            border-radius: 50%;
-            transform: rotate(-24deg);
-            box-shadow:
-                0 0 36px rgba(215,180,90,0.08);
-            animation: pieroloos-orbit-tilt 5.5s linear infinite reverse;
-        }}
-
-        /* Secondary orbit track. */
-        .pieroloos-critical-boot::before {{
-            content: "";
-            position: absolute;
-            width: min(520px, 94vw);
-            height: min(520px, 94vw);
-            border: 1px solid rgba(98,217,255,0.11);
-            border-radius: 50%;
-            box-shadow:
-                0 0 90px rgba(98,217,255,0.05),
-                inset 0 0 90px rgba(155,108,255,0.035);
-            animation: pieroloos-orbit-spin-reverse 13s linear infinite;
-        }}
-
-        /* Distant orbit creates depth without touching the app UI. */
-        .pieroloos-critical-boot::after {{
-            content: "";
-            position: absolute;
-            width: min(760px, 122vw);
-            height: min(300px, 48vw);
-            border: 1px solid rgba(215,180,90,0.10);
-            border-radius: 50%;
-            transform: rotate(18deg);
-            box-shadow: 0 0 60px rgba(215,180,90,0.035);
-            animation: pieroloos-distant-orbit 10s linear infinite;
-        }}
-
-        /* ====================================================
-           OFFICIAL LOGO EMBEDDED INTO THE ORBITAL CORE
-           ==================================================== */
-
-        .pieroloos-orbit-logo {{
-            position: relative;
-            z-index: 8;
-            width: min(148px, 34vw);
-            height: min(148px, 34vw);
-            border-radius: 50%;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background:
-                radial-gradient(
-                    circle at 35% 28%,
-                    rgba(255,255,255,0.12),
-                    rgba(10,7,30,0.94) 68%
-                );
-            border: 2px solid rgba(244,220,145,0.82);
-            box-shadow:
-                0 0 0 7px rgba(155,108,255,0.055),
-                0 0 32px rgba(215,180,90,0.28),
-                0 0 82px rgba(155,108,255,0.26),
-                inset 0 0 30px rgba(98,217,255,0.09);
-            animation:
-                pieroloos-logo-arrive 620ms ease-out both,
-                pieroloos-logo-pulse 2.4s ease-in-out 650ms infinite;
-        }}
-
-        .pieroloos-orbit-logo::before {{
-            content: "";
-            position: absolute;
-            inset: 7px;
-            z-index: 2;
-            border: 1px solid rgba(98,217,255,0.34);
-            border-radius: 50%;
-            pointer-events: none;
-        }}
-
-        .pieroloos-orbit-logo::after {{
-            content: "";
-            position: absolute;
-            z-index: 4;
-            top: -35%;
-            left: -85%;
-            width: 42%;
-            height: 170%;
-            transform: rotate(22deg);
-            background:
-                linear-gradient(
-                    90deg,
-                    transparent,
-                    rgba(255,255,255,0.30),
-                    transparent
-                );
-            filter: blur(2px);
-            pointer-events: none;
-            animation: pieroloos-logo-shine 2.8s ease-in-out 850ms infinite;
-        }}
-
-        .pieroloos-orbit-logo img {{
-            position: relative;
-            z-index: 1;
-            width: 100%;
-            height: 100%;
-            display: block;
-            object-fit: cover;
-            object-position: center;
-            border-radius: 50%;
-            clip-path: circle(50% at 50% 50%);
-            transform: scale(1.015);
-        }}
-
-        .pieroloos-orbit-logo-halo {{
-            position: absolute;
-            z-index: 0;
-            width: 76%;
-            height: 76%;
-            border-radius: 50%;
-            background:
-                radial-gradient(
-                    circle,
-                    rgba(155,108,255,0.18),
-                    rgba(98,217,255,0.06) 48%,
-                    transparent 72%
-                );
-            filter: blur(10px);
-            animation: pieroloos-halo-breathe 2.6s ease-in-out infinite;
-        }}
-
-        .pieroloos-orbit-logo-fallback {{
-            color: #f4dc91;
-            letter-spacing: 0.13em;
-            font-size: clamp(0.85rem, 3.6vw, 1.25rem);
-            font-weight: 900;
-            text-align: center;
-        }}
-
-        /* Small luminous orbital nodes. */
-        .pieroloos-critical-core .orbit-node {{
-            position: absolute;
-            z-index: 6;
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: #f4dc91;
-            box-shadow:
-                0 0 10px rgba(244,220,145,0.80),
-                0 0 24px rgba(155,108,255,0.55);
-        }}
-
-        .pieroloos-critical-core .orbit-node-a {{
-            top: 7%;
-            left: 22%;
-            animation: pieroloos-node-a 4.5s linear infinite;
-        }}
-
-        .pieroloos-critical-core .orbit-node-b {{
-            right: 5%;
-            top: 48%;
-            width: 5px;
-            height: 5px;
-            background: #62d9ff;
-            animation: pieroloos-node-b 3.8s linear infinite;
-        }}
-
-        .pieroloos-critical-core .orbit-node-c {{
-            left: 18%;
-            bottom: 8%;
-            width: 5px;
-            height: 5px;
-            background: #9b6cff;
-            animation: pieroloos-node-c 5.2s linear infinite;
-        }}
-
-        .pieroloos-critical-label {{
-            position: absolute;
-            z-index: 10;
-            left: 50%;
-            bottom: -3.95rem;
-            transform: translateX(-50%);
-            white-space: nowrap;
-            color: rgba(230,221,248,0.82);
-            font-size: 0.58rem;
-            font-weight: 750;
-            letter-spacing: 0.26em;
-            text-transform: uppercase;
-            text-align: center;
-        }}
-
-        .pieroloos-critical-progress {{
-            position: absolute;
-            z-index: 10;
-            left: 50%;
-            bottom: -5.15rem;
-            width: min(190px, 48vw);
-            height: 2px;
-            transform: translateX(-50%);
-            overflow: hidden;
-            border-radius: 99px;
-            background: rgba(155,108,255,0.15);
-        }}
-
-        .pieroloos-critical-progress::after {{
-            content: "";
-            display: block;
-            width: 42%;
-            height: 100%;
-            border-radius: inherit;
-            background:
-                linear-gradient(
-                    90deg,
-                    #62d9ff,
-                    #9b6cff,
-                    #f4dc91
-                );
-            box-shadow: 0 0 12px rgba(155,108,255,0.45);
-            animation:
-                pieroloos-critical-progress
-                3200ms
-                linear
-                100ms
-                forwards;
-        }}
-
-        @keyframes pieroloos-logo-arrive {{
-            from {{
-                opacity: 0;
-                transform: scale(0.68);
-            }}
-            to {{
-                opacity: 1;
-                transform: scale(1);
-            }}
-        }}
-
-        @keyframes pieroloos-logo-pulse {{
-            0%, 100% {{
-                transform: scale(1);
-                box-shadow:
-                    0 0 0 7px rgba(155,108,255,0.055),
-                    0 0 32px rgba(215,180,90,0.28),
-                    0 0 82px rgba(155,108,255,0.26),
-                    inset 0 0 30px rgba(98,217,255,0.09);
-            }}
-            50% {{
-                transform: scale(1.045);
-                box-shadow:
-                    0 0 0 11px rgba(155,108,255,0.075),
-                    0 0 46px rgba(215,180,90,0.38),
-                    0 0 108px rgba(155,108,255,0.34),
-                    inset 0 0 38px rgba(98,217,255,0.14);
-            }}
-        }}
-
-        @keyframes pieroloos-halo-breathe {{
-            0%, 100% {{ opacity: 0.42; transform: scale(0.92); }}
-            50% {{ opacity: 0.92; transform: scale(1.08); }}
-        }}
-
-        @keyframes pieroloos-logo-shine {{
-            0% {{ left: -85%; opacity: 0; }}
-            18% {{ opacity: 0.82; }}
-            42% {{ left: 140%; opacity: 0; }}
-            100% {{ left: 140%; opacity: 0; }}
-        }}
-
-        @keyframes pieroloos-orbit-spin {{
-            from {{ transform: rotate(0deg); }}
-            to {{ transform: rotate(360deg); }}
-        }}
-
-        @keyframes pieroloos-orbit-spin-reverse {{
-            from {{ transform: rotate(0deg); }}
-            to {{ transform: rotate(-360deg); }}
-        }}
-
-        @keyframes pieroloos-orbit-tilt {{
-            from {{ transform: rotate(-24deg); }}
-            to {{ transform: rotate(336deg); }}
-        }}
-
-        @keyframes pieroloos-distant-orbit {{
-            from {{ transform: rotate(18deg); }}
-            to {{ transform: rotate(378deg); }}
-        }}
-
-        @keyframes pieroloos-node-a {{
-            from {{ transform: rotate(0deg) translateX(150px) rotate(0deg); }}
-            to {{ transform: rotate(360deg) translateX(150px) rotate(-360deg); }}
-        }}
-
-        @keyframes pieroloos-node-b {{
-            from {{ transform: rotate(180deg) translateX(142px) rotate(-180deg); }}
-            to {{ transform: rotate(540deg) translateX(142px) rotate(-540deg); }}
-        }}
-
-        @keyframes pieroloos-node-c {{
-            from {{ transform: rotate(300deg) translateX(135px) rotate(-300deg); }}
-            to {{ transform: rotate(660deg) translateX(135px) rotate(-660deg); }}
-        }}
-
-        @keyframes pieroloos-critical-progress {{
-            from {{ transform: translateX(-120%); }}
-            to {{ transform: translateX(280%); }}
-        }}
-
-        @keyframes pieroloos-critical-boot-exit {{
-            0% {{
-                opacity: 1;
-                visibility: visible;
-            }}
-            91% {{
-                opacity: 1;
-                visibility: visible;
-            }}
-            100% {{
-                opacity: 0;
-                visibility: hidden;
-            }}
-        }}
-
-        @media (max-width: 768px) {{
-            .pieroloos-critical-core {{
-                width: min(330px, 80vw);
-                height: min(330px, 80vw);
-            }}
-
-            .pieroloos-orbit-logo {{
-                width: min(132px, 34vw);
-                height: min(132px, 34vw);
-            }}
-
-            .pieroloos-critical-label {{
-                font-size: 0.50rem;
-                letter-spacing: 0.19em;
-                bottom: -3.65rem;
-            }}
-
-            .pieroloos-critical-progress {{
-                bottom: -4.75rem;
-            }}
-        }}
-
-        @media (prefers-reduced-motion: reduce) {{
-            .pieroloos-critical-boot {{
-                animation-duration: 1ms !important;
-                animation-delay: 900ms !important;
-            }}
-
-            .pieroloos-critical-boot::before,
-            .pieroloos-critical-boot::after,
-            .pieroloos-critical-core::before,
-            .pieroloos-critical-core::after,
-            .pieroloos-orbit-logo,
-            .pieroloos-orbit-logo-halo,
-            .pieroloos-orbit-logo::after,
-            .pieroloos-critical-progress::after,
-            .pieroloos-critical-core .orbit-node {{
-                animation: none !important;
-            }}
-        }}
-        </style>
-
-        <div
-            class="pieroloos-critical-boot"
-            aria-label="PieroloCorp International LLC official identity initializing"
-        >
-            <div class="pieroloos-critical-core">
-                {logo_markup}
-
-                <div class="orbit-node orbit-node-a"></div>
-                <div class="orbit-node orbit-node-b"></div>
-                <div class="orbit-node orbit-node-c"></div>
-
-                <div class="pieroloos-critical-label">
-                    PIEROLOOS · OFFICIAL IDENTITY · INITIALIZING
-                </div>
-
-                <div class="pieroloos-critical-progress"></div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-# CRITICAL ORDER:
-# The logo is emitted before SQLite/database migration begins.
-render_critical_boot_logo()
+PAGE_BANNER_WIDTH = 1600
 
 
 # ============================================================
@@ -1157,27 +644,14 @@ JURISDICTIONS = [
 
 
 
-PAGE_BANNER_COPY = {
-    "Command Center": "Executive overview of the PieroloOS operating environment.",
-    "Client Intake": "Capture structured client, founder, business, and engagement information.",
-    "Business Profile": "Build a structured commercial and strategic profile for each client.",
-    "Jurisdiction Lens": "Compare jurisdictions using structured business decision-support criteria.",
-    "Formation Roadmap": "Convert a business objective into an organised formation sequence.",
-    "Compliance": "Track high-level operational obligations and recurring compliance activities.",
-    "Report Generator": "Generate structured professional-service reports from stored information.",
-    "Engagement Records": "Maintain the operational register for active and completed client matters.",
-}
-
-
 def render_page_banner(page_name: str) -> None:
-    """Render a responsive graphical banner with readable static content.
+    """Render a page-specific graphical banner only.
 
-    The artwork remains the visual foundation. A responsive HTML content
-    frame is layered above it so the page title and supporting descriptor
-    remain legible on desktop, tablet, and small mobile screens.
+    Page titles and descriptive text are intentionally NOT rendered
+    inside the banner. Each page's Streamlit H1 below the banner is
+    the authoritative page heading.
     """
     banner_path = PAGE_BANNER_CANDIDATES.get(page_name)
-    banner_copy = PAGE_BANNER_COPY.get(page_name, "PieroloOS professional service workspace.")
 
     if banner_path and asset_exists(banner_path):
         image_uri = load_image_data_uri(str(banner_path))
@@ -1185,33 +659,27 @@ def render_page_banner(page_name: str) -> None:
         if image_uri:
             st.markdown(
                 f"""
-                <section class="page-banner" aria-label="{page_name} banner">
+                <section class="page-banner" aria-label="{page_name} graphical banner">
                     <img
                         class="page-banner-image"
                         src="{image_uri}"
                         alt=""
                     />
                     <div class="page-banner-overlay"></div>
-                    <div class="page-banner-content-frame">
-                        <div class="page-banner-kicker">PIEROLOOS · PROFESSIONAL SERVICE OS</div>
-                        <div class="page-banner-title">{page_name}</div>
-                        <div class="page-banner-description">{banner_copy}</div>
-                    </div>
                 </section>
                 """,
                 unsafe_allow_html=True,
             )
             return
 
+    # Keep a graphical fallback so the page layout remains stable when
+    # an asset is unavailable. The missing asset message is intentionally
+    # omitted from the visible banner; the sidebar System Status provides
+    # asset diagnostics.
     st.markdown(
-        f"""
-        <section class="page-banner page-banner-fallback" aria-label="{page_name} banner">
+        """
+        <section class="page-banner page-banner-fallback" aria-label="Graphical banner">
             <div class="page-banner-fallback-glow"></div>
-            <div class="page-banner-content-frame">
-                <div class="page-banner-kicker">PIEROLOOS · PROFESSIONAL SERVICE OS</div>
-                <div class="page-banner-title">{page_name}</div>
-                <div class="page-banner-description">{banner_copy}</div>
-            </div>
         </section>
         """,
         unsafe_allow_html=True,
@@ -1749,16 +1217,15 @@ def inject_styles() -> None:
     .page-banner {
         position: relative;
         width: 100%;
-        min-height: 330px;
+        min-height: 290px;
         margin: 0 0 1.5rem 0;
         overflow: hidden;
-        border-radius: 26px;
-        border: 1px solid rgba(215,180,90,0.34);
-        background: rgba(8,7,24,0.78);
+        border-radius: 24px;
+        border: 1px solid rgba(215,180,90,0.28);
+        background: rgba(8,7,24,0.72);
         box-shadow:
-            0 24px 70px rgba(0,0,0,0.38),
-            0 0 55px rgba(155,108,255,0.075),
-            inset 0 1px 0 rgba(255,255,255,0.035);
+            0 24px 70px rgba(0,0,0,0.35),
+            0 0 55px rgba(155,108,255,0.055);
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
     }
@@ -1769,73 +1236,16 @@ def inject_styles() -> None:
         width: 100%;
         height: 100%;
         object-fit: cover;
-        object-position: center;
         display: block;
-        transform: scale(1.015);
     }
 
     .page-banner-overlay {
         position: absolute;
         inset: 0;
         background:
-            linear-gradient(90deg, rgba(4,4,16,0.56), rgba(5,5,18,0.20) 50%, rgba(5,5,18,0.48)),
-            linear-gradient(180deg, rgba(5,5,18,0.12), rgba(5,5,18,0.34)),
-            radial-gradient(circle at 72% 50%, rgba(155,108,255,0.14), transparent 34%);
+            linear-gradient(90deg, rgba(5,5,18,0.18), rgba(5,5,18,0.03) 52%, rgba(5,5,18,0.18)),
+            radial-gradient(circle at 72% 50%, rgba(155,108,255,0.08), transparent 32%);
         pointer-events: none;
-    }
-
-    .page-banner-content-frame {
-        position: absolute;
-        z-index: 3;
-        left: clamp(1rem, 4vw, 3.5rem);
-        top: 50%;
-        transform: translateY(-50%);
-        width: min(760px, calc(100% - 2rem));
-        box-sizing: border-box;
-        padding: clamp(1.1rem, 3vw, 2rem) clamp(1.15rem, 3vw, 2.25rem);
-        border: 1px solid rgba(244,220,145,0.34);
-        border-left: 4px solid rgba(244,220,145,0.82);
-        border-radius: 20px;
-        background:
-            linear-gradient(135deg, rgba(8,7,27,0.84), rgba(17,10,42,0.68));
-        box-shadow:
-            0 18px 50px rgba(0,0,0,0.30),
-            0 0 34px rgba(155,108,255,0.10),
-            inset 0 1px 0 rgba(255,255,255,0.045);
-        backdrop-filter: blur(15px);
-        -webkit-backdrop-filter: blur(15px);
-    }
-
-    .page-banner-kicker {
-        color: #70ddff;
-        font-size: clamp(0.62rem, 1.05vw, 0.82rem);
-        line-height: 1.25;
-        font-weight: 800;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        margin-bottom: 0.55rem;
-        text-shadow: 0 0 16px rgba(98,217,255,0.18);
-    }
-
-    .page-banner-title {
-        color: #f6dc91;
-        font-size: clamp(2rem, 4.25vw, 3.35rem);
-        line-height: 1.05;
-        font-weight: 900;
-        letter-spacing: -0.025em;
-        text-wrap: balance;
-        text-shadow:
-            0 0 20px rgba(215,180,90,0.18),
-            0 0 38px rgba(155,108,255,0.10);
-    }
-
-    .page-banner-description {
-        max-width: 680px;
-        margin-top: 0.65rem;
-        color: #e2daef;
-        font-size: clamp(0.92rem, 1.55vw, 1.16rem);
-        line-height: 1.5;
-        font-weight: 560;
     }
 
     .page-banner-fallback {
@@ -1987,48 +1397,12 @@ def inject_styles() -> None:
         }
 
         .page-banner {
-            min-height: 300px;
+            min-height: 220px;
             border-radius: 18px;
-            margin-bottom: 1.15rem;
-        }
-
-        .page-banner-image {
-            object-position: center center;
         }
 
         .page-banner-overlay {
-            background:
-                linear-gradient(180deg, rgba(5,5,18,0.20), rgba(5,5,18,0.58)),
-                linear-gradient(90deg, rgba(5,5,18,0.38), rgba(5,5,18,0.20));
-        }
-
-        .page-banner-content-frame {
-            left: 0.85rem;
-            right: 0.85rem;
-            top: auto;
-            bottom: 0.85rem;
-            transform: none;
-            width: auto;
-            padding: 1rem 1rem 1.05rem 1rem;
-            border-radius: 16px;
-            border-left-width: 3px;
-        }
-
-        .page-banner-kicker {
-            font-size: 0.58rem;
-            letter-spacing: 0.13em;
-            margin-bottom: 0.42rem;
-        }
-
-        .page-banner-title {
-            font-size: clamp(1.65rem, 8.5vw, 2.35rem);
-            line-height: 1.06;
-        }
-
-        .page-banner-description {
-            margin-top: 0.5rem;
-            font-size: 0.92rem;
-            line-height: 1.42;
+            background: linear-gradient(90deg, rgba(5,5,18,0.16), rgba(5,5,18,0.04));
         }
 
         .stApp::after {
@@ -2040,27 +1414,6 @@ def inject_styles() -> None:
         [data-testid="stAppViewContainer"]::before {
             width: 520px;
             height: 230px;
-        }
-    }
-
-    @media (max-width: 430px) {
-        .page-banner {
-            min-height: 320px;
-        }
-
-        .page-banner-content-frame {
-            left: 0.65rem;
-            right: 0.65rem;
-            bottom: 0.65rem;
-            padding: 0.9rem 0.85rem 0.95rem 0.85rem;
-        }
-
-        .page-banner-title {
-            font-size: clamp(1.55rem, 8.8vw, 2.05rem);
-        }
-
-        .page-banner-description {
-            font-size: 0.88rem;
         }
     }
 
