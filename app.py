@@ -98,16 +98,16 @@ def load_image_data_uri(path_string: str) -> str:
 
 
 def asset_exists(path: Path) -> bool:
-    return path.exists() and path.is_file() and path.stat().st_size > 100
-
-
-PAGE_ASSET_STATUS = {
-    name: asset_exists(path)
-    for name, path in PAGE_BANNER_CANDIDATES.items()
-}
+    return (
+        path.exists()
+        and path.is_file()
+        and path.stat().st_size > 100
+    )
 
 
 # Additional page-specific visual assets.
+# This registry MUST be defined before PAGE_ASSET_STATUS because
+# the status map is built from these paths.
 PAGE_BANNER_CANDIDATES = {
     "Command Center": ASSET_DIR / "pieroloos_command_center.png",
     "Client Intake": ASSET_DIR / "pieroloos_client_intake.png",
@@ -118,6 +118,14 @@ PAGE_BANNER_CANDIDATES = {
     "Report Generator": ASSET_DIR / "pieroloos_reports.png",
     "Engagement Records": ASSET_DIR / "pieroloos_engagements.png",
 }
+
+
+# Evaluate asset availability only after the banner registry exists.
+PAGE_ASSET_STATUS = {
+    name: asset_exists(path)
+    for name, path in PAGE_BANNER_CANDIDATES.items()
+}
+
 
 PAGE_BANNER_WIDTH = 1600
 
