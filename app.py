@@ -127,7 +127,7 @@ PAGE_ASSET_STATUS = {
 }
 
 
-PAGE_BANNER_WIDTH = 1600
+PAGE_BANNER_WIDTH = 1600  # artwork reference width; responsive frame is CSS-driven
 
 
 # ============================================================
@@ -1157,14 +1157,27 @@ JURISDICTIONS = [
 
 
 
-def render_page_banner(page_name: str) -> None:
-    """Render a page-specific graphical banner only.
+PAGE_BANNER_COPY = {
+    "Command Center": "Executive overview of the PieroloOS operating environment.",
+    "Client Intake": "Capture structured client, founder, business, and engagement information.",
+    "Business Profile": "Build a structured commercial and strategic profile for each client.",
+    "Jurisdiction Lens": "Compare jurisdictions using structured business decision-support criteria.",
+    "Formation Roadmap": "Convert a business objective into an organised formation sequence.",
+    "Compliance": "Track high-level operational obligations and recurring compliance activities.",
+    "Report Generator": "Generate structured professional-service reports from stored information.",
+    "Engagement Records": "Maintain the operational register for active and completed client matters.",
+}
 
-    Page titles and descriptive text are intentionally NOT rendered
-    inside the banner. Each page's Streamlit H1 below the banner is
-    the authoritative page heading.
+
+def render_page_banner(page_name: str) -> None:
+    """Render a responsive graphical banner with readable static content.
+
+    The artwork remains the visual foundation. A responsive HTML content
+    frame is layered above it so the page title and supporting descriptor
+    remain legible on desktop, tablet, and small mobile screens.
     """
     banner_path = PAGE_BANNER_CANDIDATES.get(page_name)
+    banner_copy = PAGE_BANNER_COPY.get(page_name, "PieroloOS professional service workspace.")
 
     if banner_path and asset_exists(banner_path):
         image_uri = load_image_data_uri(str(banner_path))
@@ -1172,27 +1185,33 @@ def render_page_banner(page_name: str) -> None:
         if image_uri:
             st.markdown(
                 f"""
-                <section class="page-banner" aria-label="{page_name} graphical banner">
+                <section class="page-banner" aria-label="{page_name} banner">
                     <img
                         class="page-banner-image"
                         src="{image_uri}"
                         alt=""
                     />
                     <div class="page-banner-overlay"></div>
+                    <div class="page-banner-content-frame">
+                        <div class="page-banner-kicker">PIEROLOOS · PROFESSIONAL SERVICE OS</div>
+                        <div class="page-banner-title">{page_name}</div>
+                        <div class="page-banner-description">{banner_copy}</div>
+                    </div>
                 </section>
                 """,
                 unsafe_allow_html=True,
             )
             return
 
-    # Keep a graphical fallback so the page layout remains stable when
-    # an asset is unavailable. The missing asset message is intentionally
-    # omitted from the visible banner; the sidebar System Status provides
-    # asset diagnostics.
     st.markdown(
-        """
-        <section class="page-banner page-banner-fallback" aria-label="Graphical banner">
+        f"""
+        <section class="page-banner page-banner-fallback" aria-label="{page_name} banner">
             <div class="page-banner-fallback-glow"></div>
+            <div class="page-banner-content-frame">
+                <div class="page-banner-kicker">PIEROLOOS · PROFESSIONAL SERVICE OS</div>
+                <div class="page-banner-title">{page_name}</div>
+                <div class="page-banner-description">{banner_copy}</div>
+            </div>
         </section>
         """,
         unsafe_allow_html=True,
@@ -1730,15 +1749,16 @@ def inject_styles() -> None:
     .page-banner {
         position: relative;
         width: 100%;
-        min-height: 290px;
+        min-height: 330px;
         margin: 0 0 1.5rem 0;
         overflow: hidden;
-        border-radius: 24px;
-        border: 1px solid rgba(215,180,90,0.28);
-        background: rgba(8,7,24,0.72);
+        border-radius: 26px;
+        border: 1px solid rgba(215,180,90,0.34);
+        background: rgba(8,7,24,0.78);
         box-shadow:
-            0 24px 70px rgba(0,0,0,0.35),
-            0 0 55px rgba(155,108,255,0.055);
+            0 24px 70px rgba(0,0,0,0.38),
+            0 0 55px rgba(155,108,255,0.075),
+            inset 0 1px 0 rgba(255,255,255,0.035);
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
     }
@@ -1749,16 +1769,73 @@ def inject_styles() -> None:
         width: 100%;
         height: 100%;
         object-fit: cover;
+        object-position: center;
         display: block;
+        transform: scale(1.015);
     }
 
     .page-banner-overlay {
         position: absolute;
         inset: 0;
         background:
-            linear-gradient(90deg, rgba(5,5,18,0.18), rgba(5,5,18,0.03) 52%, rgba(5,5,18,0.18)),
-            radial-gradient(circle at 72% 50%, rgba(155,108,255,0.08), transparent 32%);
+            linear-gradient(90deg, rgba(4,4,16,0.56), rgba(5,5,18,0.20) 50%, rgba(5,5,18,0.48)),
+            linear-gradient(180deg, rgba(5,5,18,0.12), rgba(5,5,18,0.34)),
+            radial-gradient(circle at 72% 50%, rgba(155,108,255,0.14), transparent 34%);
         pointer-events: none;
+    }
+
+    .page-banner-content-frame {
+        position: absolute;
+        z-index: 3;
+        left: clamp(1rem, 4vw, 3.5rem);
+        top: 50%;
+        transform: translateY(-50%);
+        width: min(760px, calc(100% - 2rem));
+        box-sizing: border-box;
+        padding: clamp(1.1rem, 3vw, 2rem) clamp(1.15rem, 3vw, 2.25rem);
+        border: 1px solid rgba(244,220,145,0.34);
+        border-left: 4px solid rgba(244,220,145,0.82);
+        border-radius: 20px;
+        background:
+            linear-gradient(135deg, rgba(8,7,27,0.84), rgba(17,10,42,0.68));
+        box-shadow:
+            0 18px 50px rgba(0,0,0,0.30),
+            0 0 34px rgba(155,108,255,0.10),
+            inset 0 1px 0 rgba(255,255,255,0.045);
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+    }
+
+    .page-banner-kicker {
+        color: #70ddff;
+        font-size: clamp(0.62rem, 1.05vw, 0.82rem);
+        line-height: 1.25;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        margin-bottom: 0.55rem;
+        text-shadow: 0 0 16px rgba(98,217,255,0.18);
+    }
+
+    .page-banner-title {
+        color: #f6dc91;
+        font-size: clamp(2rem, 4.25vw, 3.35rem);
+        line-height: 1.05;
+        font-weight: 900;
+        letter-spacing: -0.025em;
+        text-wrap: balance;
+        text-shadow:
+            0 0 20px rgba(215,180,90,0.18),
+            0 0 38px rgba(155,108,255,0.10);
+    }
+
+    .page-banner-description {
+        max-width: 680px;
+        margin-top: 0.65rem;
+        color: #e2daef;
+        font-size: clamp(0.92rem, 1.55vw, 1.16rem);
+        line-height: 1.5;
+        font-weight: 560;
     }
 
     .page-banner-fallback {
@@ -1910,12 +1987,48 @@ def inject_styles() -> None:
         }
 
         .page-banner {
-            min-height: 220px;
+            min-height: 300px;
             border-radius: 18px;
+            margin-bottom: 1.15rem;
+        }
+
+        .page-banner-image {
+            object-position: center center;
         }
 
         .page-banner-overlay {
-            background: linear-gradient(90deg, rgba(5,5,18,0.16), rgba(5,5,18,0.04));
+            background:
+                linear-gradient(180deg, rgba(5,5,18,0.20), rgba(5,5,18,0.58)),
+                linear-gradient(90deg, rgba(5,5,18,0.38), rgba(5,5,18,0.20));
+        }
+
+        .page-banner-content-frame {
+            left: 0.85rem;
+            right: 0.85rem;
+            top: auto;
+            bottom: 0.85rem;
+            transform: none;
+            width: auto;
+            padding: 1rem 1rem 1.05rem 1rem;
+            border-radius: 16px;
+            border-left-width: 3px;
+        }
+
+        .page-banner-kicker {
+            font-size: 0.58rem;
+            letter-spacing: 0.13em;
+            margin-bottom: 0.42rem;
+        }
+
+        .page-banner-title {
+            font-size: clamp(1.65rem, 8.5vw, 2.35rem);
+            line-height: 1.06;
+        }
+
+        .page-banner-description {
+            margin-top: 0.5rem;
+            font-size: 0.92rem;
+            line-height: 1.42;
         }
 
         .stApp::after {
@@ -1927,6 +2040,27 @@ def inject_styles() -> None:
         [data-testid="stAppViewContainer"]::before {
             width: 520px;
             height: 230px;
+        }
+    }
+
+    @media (max-width: 430px) {
+        .page-banner {
+            min-height: 320px;
+        }
+
+        .page-banner-content-frame {
+            left: 0.65rem;
+            right: 0.65rem;
+            bottom: 0.65rem;
+            padding: 0.9rem 0.85rem 0.95rem 0.85rem;
+        }
+
+        .page-banner-title {
+            font-size: clamp(1.55rem, 8.8vw, 2.05rem);
+        }
+
+        .page-banner-description {
+            font-size: 0.88rem;
         }
     }
 
