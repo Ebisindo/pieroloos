@@ -131,6 +131,332 @@ PAGE_BANNER_WIDTH = 1600
 
 
 # ============================================================
+# 2A. CRITICAL BOOT LOGO — RENDER BEFORE DATABASE INITIALISATION
+# ============================================================
+#
+# This is intentionally placed before SQLite migration/start-up work.
+# Streamlit can send these early UI deltas while the remaining Python
+# application continues initialising. The logo therefore becomes the
+# first meaningful visual element instead of waiting for the database
+# layer to finish.
+#
+# The full visual system is injected later by inject_styles().
+# These styles are deliberately self-contained so the boot experience
+# does not depend on the later application stylesheet.
+#
+
+def render_critical_boot_logo() -> None:
+    """Render the logo immediately, before slow application initialisation."""
+
+    if st.session_state.get("pieroloos_boot_seen", False):
+        return
+
+    st.session_state["pieroloos_boot_seen"] = True
+
+    if LOGO_EXISTS:
+        logo_uri = load_image_data_uri(str(LOGO_PATH))
+        logo_markup = (
+            f"""
+            <div class="pieroloos-critical-logo-frame">
+                <img
+                    class="pieroloos-critical-logo"
+                    src="{logo_uri}"
+                    alt="PieroloCorp International LLC"
+                />
+            </div>
+            """
+            if logo_uri
+            else
+            """
+            <div class="pieroloos-critical-logo-fallback">
+                PIEROLOOS
+            </div>
+            """
+        )
+    else:
+        logo_markup = """
+        <div class="pieroloos-critical-logo-fallback">
+            PIEROLOOS
+        </div>
+        """
+
+    st.markdown(
+        f"""
+        <style>
+        .pieroloos-critical-boot {{
+            position: fixed;
+            inset: 0;
+            z-index: 2147483647;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background:
+                radial-gradient(
+                    circle at 50% 50%,
+                    rgba(155,108,255,0.20),
+                    transparent 24%
+                ),
+                radial-gradient(
+                    circle at 50% 50%,
+                    rgba(98,217,255,0.07),
+                    transparent 40%
+                ),
+                linear-gradient(
+                    135deg,
+                    #02020b 0%,
+                    #08051c 48%,
+                    #03030d 100%
+                );
+            pointer-events: none;
+            animation:
+                pieroloos-critical-boot-exit
+                850ms
+                cubic-bezier(.22,.61,.36,1)
+                1200ms
+                forwards;
+        }}
+
+        .pieroloos-critical-boot::before {{
+            content: "";
+            position: absolute;
+            width: min(520px, 92vw);
+            height: min(520px, 92vw);
+            border: 1px solid rgba(155,108,255,0.16);
+            border-radius: 50%;
+            box-shadow:
+                0 0 80px rgba(155,108,255,0.10),
+                inset 0 0 70px rgba(98,217,255,0.035);
+            animation: pieroloos-critical-orbit 7s linear infinite;
+        }}
+
+        .pieroloos-critical-boot::after {{
+            content: "";
+            position: absolute;
+            width: min(330px, 66vw);
+            height: min(330px, 66vw);
+            border: 1px solid rgba(215,180,90,0.18);
+            border-radius: 50%;
+            transform: rotate(22deg) scaleX(1.55);
+            box-shadow: 0 0 38px rgba(215,180,90,0.055);
+            animation: pieroloos-critical-orbit-reverse 5s linear infinite;
+        }}
+
+        .pieroloos-critical-core {{
+            position: relative;
+            z-index: 3;
+            width: min(250px, 62vw);
+            height: min(250px, 62vw);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .pieroloos-critical-logo-frame {{
+            position: relative;
+            z-index: 4;
+            width: min(168px, 43vw);
+            height: min(168px, 43vw);
+            border-radius: 50%;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background:
+                radial-gradient(
+                    circle at 35% 30%,
+                    rgba(255,255,255,0.10),
+                    rgba(12,8,34,0.92) 62%
+                );
+            border: 2px solid rgba(244,220,145,0.72);
+            box-shadow:
+                0 0 0 6px rgba(155,108,255,0.055),
+                0 0 30px rgba(215,180,90,0.24),
+                0 0 70px rgba(155,108,255,0.22),
+                inset 0 0 26px rgba(98,217,255,0.08);
+            animation: pieroloos-critical-logo-in 650ms ease-out both;
+        }}
+
+        .pieroloos-critical-logo-frame::before {{
+            content: "";
+            position: absolute;
+            inset: 6px;
+            border: 1px solid rgba(98,217,255,0.32);
+            border-radius: 50%;
+            pointer-events: none;
+        }}
+
+        .pieroloos-critical-logo {{
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+            object-position: center;
+            border-radius: 50%;
+            clip-path: circle(50% at 50% 50%);
+            transform: scale(1.02);
+        }}
+
+        .pieroloos-critical-logo-fallback {{
+            position: relative;
+            z-index: 4;
+            width: min(168px, 43vw);
+            height: min(168px, 43vw);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            border: 2px solid rgba(244,220,145,0.72);
+            background: rgba(12,8,34,0.94);
+            color: #f4dc91;
+            font-size: clamp(1rem, 4vw, 1.65rem);
+            font-weight: 900;
+            letter-spacing: 0.14em;
+            text-align: center;
+            box-shadow:
+                0 0 32px rgba(215,180,90,0.20),
+                0 0 70px rgba(155,108,255,0.20);
+        }}
+
+        .pieroloos-critical-label {{
+            position: absolute;
+            z-index: 5;
+            left: 50%;
+            bottom: -5.25rem;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            color: rgba(230,221,248,0.78);
+            font-size: 0.60rem;
+            font-weight: 750;
+            letter-spacing: 0.28em;
+            text-transform: uppercase;
+        }}
+
+        .pieroloos-critical-progress {{
+            position: absolute;
+            z-index: 5;
+            left: 50%;
+            bottom: -6.45rem;
+            width: min(180px, 48vw);
+            height: 2px;
+            transform: translateX(-50%);
+            overflow: hidden;
+            border-radius: 99px;
+            background: rgba(155,108,255,0.14);
+        }}
+
+        .pieroloos-critical-progress::after {{
+            content: "";
+            display: block;
+            width: 42%;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(
+                90deg,
+                #62d9ff,
+                #9b6cff,
+                #f4dc91
+            );
+            box-shadow: 0 0 12px rgba(155,108,255,0.42);
+            animation:
+                pieroloos-critical-progress
+                1200ms
+                ease-in-out
+                forwards;
+        }}
+
+        @keyframes pieroloos-critical-logo-in {{
+            from {{
+                opacity: 0;
+                transform: scale(0.72);
+            }}
+            to {{
+                opacity: 1;
+                transform: scale(1);
+            }}
+        }}
+
+        @keyframes pieroloos-critical-orbit {{
+            from {{
+                transform: rotate(0deg);
+            }}
+            to {{
+                transform: rotate(360deg);
+            }}
+        }}
+
+        @keyframes pieroloos-critical-orbit-reverse {{
+            from {{
+                transform: rotate(22deg) scaleX(1.55);
+            }}
+            to {{
+                transform: rotate(-338deg) scaleX(1.55);
+            }}
+        }}
+
+        @keyframes pieroloos-critical-progress {{
+            from {{
+                transform: translateX(-120%);
+            }}
+            to {{
+                transform: translateX(280%);
+            }}
+        }}
+
+        @keyframes pieroloos-critical-boot-exit {{
+            0% {{
+                opacity: 1;
+                visibility: visible;
+            }}
+            72% {{
+                opacity: 1;
+                visibility: visible;
+            }}
+            100% {{
+                opacity: 0;
+                visibility: hidden;
+            }}
+        }}
+
+        @media (prefers-reduced-motion: reduce) {{
+            .pieroloos-critical-boot {{
+                animation-duration: 1ms !important;
+                animation-delay: 650ms !important;
+            }}
+
+            .pieroloos-critical-boot::before,
+            .pieroloos-critical-boot::after,
+            .pieroloos-critical-logo-frame,
+            .pieroloos-critical-progress::after {{
+                animation: none !important;
+            }}
+        }}
+        </style>
+
+        <div
+            class="pieroloos-critical-boot"
+            aria-label="PieroloCorp International LLC initializing"
+        >
+            <div class="pieroloos-critical-core">
+                {logo_markup}
+                <div class="pieroloos-critical-label">
+                    PIEROLOOS · INITIALIZING
+                </div>
+                <div class="pieroloos-critical-progress"></div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# CRITICAL ORDER:
+# The logo is emitted before SQLite/database migration begins.
+render_critical_boot_logo()
+
+
+# ============================================================
 # 3. DATABASE
 # ============================================================
 
@@ -1370,177 +1696,6 @@ def inject_styles() -> None:
        MOBILE / TABLET
        ======================================================== */
 
-    /* ========================================================
-       PIEROLOCORP OFFICIAL BOOT / LOADING EXPERIENCE
-       ======================================================== */
-
-    .pieroloos-boot-screen {
-        position: fixed;
-        inset: 0;
-        z-index: 999999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        background:
-            radial-gradient(circle at 50% 45%, rgba(155,108,255,0.18), transparent 22%),
-            radial-gradient(circle at 50% 52%, rgba(98,217,255,0.08), transparent 34%),
-            linear-gradient(135deg, #02020b 0%, #09051d 48%, #03030d 100%);
-        animation: pieroloosBootExit 700ms ease 1800ms forwards;
-        pointer-events: none;
-    }
-
-    .pieroloos-boot-stars {
-        position: absolute;
-        inset: 0;
-        background:
-            radial-gradient(circle at 16% 22%, rgba(255,255,255,0.22) 0 1px, transparent 1.8px),
-            radial-gradient(circle at 78% 18%, rgba(255,255,255,0.20) 0 1px, transparent 1.7px),
-            radial-gradient(circle at 27% 74%, rgba(255,255,255,0.16) 0 1px, transparent 1.7px),
-            radial-gradient(circle at 84% 76%, rgba(255,255,255,0.17) 0 1px, transparent 1.7px),
-            radial-gradient(circle at 51% 12%, rgba(98,217,255,0.18) 0 1px, transparent 1.8px);
-        background-size: 260px 260px, 340px 340px, 310px 310px, 390px 390px, 280px 280px;
-        opacity: 0.65;
-        animation: pieroloosBootStars 9s linear infinite;
-    }
-
-    .pieroloos-boot-core {
-        position: relative;
-        width: min(360px, 72vw);
-        aspect-ratio: 1 / 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .pieroloos-boot-ring,
-    .pieroloos-boot-ring::before,
-    .pieroloos-boot-ring::after {
-        position: absolute;
-        content: "";
-        border-radius: 50%;
-        pointer-events: none;
-    }
-
-    .pieroloos-boot-ring {
-        width: 86%;
-        height: 86%;
-        border: 1px solid rgba(215,180,90,0.32);
-        box-shadow:
-            0 0 42px rgba(155,108,255,0.16),
-            inset 0 0 35px rgba(98,217,255,0.06);
-        animation: pieroloosBootSpin 7s linear infinite;
-    }
-
-    .pieroloos-boot-ring::before {
-        inset: 10%;
-        border: 1px solid rgba(98,217,255,0.24);
-        transform: rotate(38deg) scaleX(1.55);
-    }
-
-    .pieroloos-boot-ring::after {
-        inset: 18%;
-        border: 1px solid rgba(155,108,255,0.26);
-        transform: rotate(-28deg) scaleY(1.55);
-    }
-
-    .pieroloos-boot-logo {
-        position: relative;
-        z-index: 2;
-        width: min(210px, 48vw);
-        max-height: 210px;
-        object-fit: contain;
-        filter:
-            drop-shadow(0 0 16px rgba(215,180,90,0.34))
-            drop-shadow(0 0 34px rgba(155,108,255,0.25));
-        animation: pieroloosLogoPulse 1500ms ease-in-out infinite;
-    }
-
-    .pieroloos-boot-fallback {
-        position: relative;
-        z-index: 2;
-        color: #f4dc91;
-        font-size: clamp(1.5rem, 5vw, 2.5rem);
-        font-weight: 900;
-        letter-spacing: 0.18em;
-        text-shadow: 0 0 22px rgba(215,180,90,0.32);
-    }
-
-    .pieroloos-boot-label {
-        position: absolute;
-        left: 50%;
-        bottom: 7%;
-        transform: translateX(-50%);
-        color: rgba(225,216,245,0.72);
-        font-size: 0.66rem;
-        font-weight: 700;
-        letter-spacing: 0.28em;
-        text-transform: uppercase;
-        white-space: nowrap;
-    }
-
-    .pieroloos-boot-progress {
-        position: absolute;
-        left: 50%;
-        bottom: 4.5%;
-        width: min(220px, 52vw);
-        height: 2px;
-        transform: translateX(-50%);
-        overflow: hidden;
-        border-radius: 99px;
-        background: rgba(155,108,255,0.12);
-    }
-
-    .pieroloos-boot-progress::after {
-        content: "";
-        display: block;
-        width: 42%;
-        height: 100%;
-        border-radius: inherit;
-        background: linear-gradient(90deg, #62d9ff, #9b6cff, #f4dc91);
-        box-shadow: 0 0 12px rgba(155,108,255,0.45);
-        animation: pieroloosBootProgress 1700ms ease-in-out forwards;
-    }
-
-    @keyframes pieroloosLogoPulse {
-        0%, 100% { transform: scale(0.94); opacity: 0.86; }
-        50% { transform: scale(1.02); opacity: 1; }
-    }
-
-    @keyframes pieroloosBootSpin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-    }
-
-    @keyframes pieroloosBootStars {
-        from { transform: translate3d(0, 0, 0) scale(1); }
-        to { transform: translate3d(-12px, 8px, 0) scale(1.025); }
-    }
-
-    @keyframes pieroloosBootProgress {
-        from { transform: translateX(-120%); }
-        to { transform: translateX(280%); }
-    }
-
-    @keyframes pieroloosBootExit {
-        0% { opacity: 1; visibility: visible; }
-        99% { opacity: 0; visibility: visible; }
-        100% { opacity: 0; visibility: hidden; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .pieroloos-boot-screen {
-            animation-duration: 1ms !important;
-            animation-delay: 900ms !important;
-        }
-        .pieroloos-boot-stars,
-        .pieroloos-boot-ring,
-        .pieroloos-boot-logo,
-        .pieroloos-boot-progress::after {
-            animation: none !important;
-        }
-    }
-
     @media (max-width: 768px) {
         [data-testid="stAppViewContainer"] {
             height: 100vh !important;
@@ -1632,52 +1787,7 @@ inject_styles()
 
 
 # ============================================================
-# 7. BRANDED BOOT / LOADING SCREEN
-# ============================================================
-
-def render_boot_screen() -> None:
-    """Render the official PieroloCorp logo as the session boot symbol.
-
-    The boot screen is shown once per Streamlit browser session. It is a
-    presentation layer only and does not alter application state or data.
-    """
-    if st.session_state.get("pieroloos_boot_seen", False):
-        return
-
-    st.session_state["pieroloos_boot_seen"] = True
-
-    if LOGO_EXISTS:
-        logo_uri = load_image_data_uri(str(LOGO_PATH))
-        logo_markup = (
-            f'<img class="pieroloos-boot-logo" src="{logo_uri}" '
-            'alt="PieroloCorp International LLC official logo" />'
-            if logo_uri
-            else '<div class="pieroloos-boot-fallback">PIEROLOOS</div>'
-        )
-    else:
-        logo_markup = '<div class="pieroloos-boot-fallback">PIEROLOOS</div>'
-
-    st.markdown(
-        f"""
-        <div class="pieroloos-boot-screen" aria-label="PieroloOS loading">
-            <div class="pieroloos-boot-stars"></div>
-            <div class="pieroloos-boot-core">
-                <div class="pieroloos-boot-ring"></div>
-                {logo_markup}
-                <div class="pieroloos-boot-label">PIEROLOOS · INITIALIZING</div>
-                <div class="pieroloos-boot-progress"></div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-render_boot_screen()
-
-
-# ============================================================
-# 8. SIDEBAR
+# 7. SIDEBAR
 # ============================================================
 
 with st.sidebar:
@@ -3408,5 +3518,4 @@ st.markdown(
     <div class="pieroloos-scroll-end" aria-hidden="true"></div>
     """,
     unsafe_allow_html=True,
-    )
-    
+)
