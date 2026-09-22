@@ -75,6 +75,53 @@ BACKGROUND_EXISTS = BACKGROUND_PATH.exists()
 LOGO_EXISTS = LOGO_PATH is not None
 
 
+@st.cache_data(show_spinner=False)
+def load_image_data_uri(path_string: str) -> str:
+    """Return a local image as a browser-safe data URI."""
+    path = Path(path_string)
+    if not path.exists() or not path.is_file():
+        return ""
+
+    suffix = path.suffix.lower()
+    mime_types = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }
+    mime = mime_types.get(suffix)
+    if not mime:
+        return ""
+
+    encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
+    return f"data:{mime};base64,{encoded}"
+
+
+def asset_exists(path: Path) -> bool:
+    return path.exists() and path.is_file() and path.stat().st_size > 100
+
+
+PAGE_ASSET_STATUS = {
+    name: asset_exists(path)
+    for name, path in PAGE_BANNER_CANDIDATES.items()
+}
+
+
+# Additional page-specific visual assets.
+PAGE_BANNER_CANDIDATES = {
+    "Command Center": ASSET_DIR / "pieroloos_command_center.png",
+    "Client Intake": ASSET_DIR / "pieroloos_client_intake.png",
+    "Business Profile": ASSET_DIR / "pieroloos_business_profile.png",
+    "Jurisdiction Lens": ASSET_DIR / "pieroloos_jurisdiction.png",
+    "Formation Roadmap": ASSET_DIR / "pieroloos_formation.png",
+    "Compliance": ASSET_DIR / "pieroloos_compliance.png",
+    "Report Generator": ASSET_DIR / "pieroloos_reports.png",
+    "Engagement Records": ASSET_DIR / "pieroloos_engagements.png",
+}
+
+PAGE_BANNER_WIDTH = 1600
+
+
 # ============================================================
 # 3. DATABASE
 # ============================================================
@@ -418,13 +465,14 @@ def execute_write(
 
     connection = get_connection()
 
-    connection.execute(
-        query,
-        params,
-    )
-
-    connection.commit()
-    connection.close()
+    try:
+        connection.execute(query, params)
+        connection.commit()
+    except sqlite3.Error as exc:
+        connection.rollback()
+        raise RuntimeError(f"Database operation failed: {exc}") from exc
+    finally:
+        connection.close()
 
 
 def fetch_all(
@@ -587,43 +635,64 @@ JURISDICTIONS = [
 ]
 
 
+
+def render_page_banner(page_name: str, title: str, subtitle: str) -> None:
+    """Render a page-specific graphical hero with a branded overlay."""
+    banner_path = PAGE_BANNER_CANDIDATES.get(page_name)
+    image_uri = load_image_data_uri(str(banner_path)) if banner_path and asset_exists(banner_path) else ""
+
+    if image_uri:
+        st.markdown(
+            f"""
+            <section class="page-banner">
+                <img class="page-banner-image" src="{image_uri}" alt="{title} graphical header" />
+                <div class="page-banner-overlay"></div>
+                <div class="page-banner-content">
+                    <div class="page-banner-eyebrow">PIEROLOOS · PIEROLOCORP INTERNATIONAL LLC</div>
+                    <div class="page-banner-title">{title}</div>
+                    <div class="page-banner-subtitle">{subtitle}</div>
+                </div>
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f"""
+            <section class="page-banner page-banner-fallback">
+                <div class="page-banner-content">
+                    <div class="page-banner-eyebrow">PIEROLOOS · PIEROLOCORP INTERNATIONAL LLC</div>
+                    <div class="page-banner-title">{title}</div>
+                    <div class="page-banner-subtitle">{subtitle}</div>
+                    <div class="page-banner-missing">GRAPHICAL ASSET NOT FOUND · CHECK /assets/{banner_path.name if banner_path else ''}</div>
+                </div>
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
 # ============================================================
 # 6. VISUAL DESIGN
 # ============================================================
 
 def inject_styles() -> None:
-
-    # Keep the CSS as a normal string rather than an f-string.
-    # This prevents CSS braces such as { border: ...; } from being
-    # interpreted by Python as expressions and causing NameError.
+    """Inject the responsive PieroloOS visual system without f-string CSS errors."""
     if BACKGROUND_URI:
         background_css = (
             "background-image: "
-            "linear-gradient("
-            "rgba(5, 5, 18, 0.78), "
-            "rgba(5, 5, 18, 0.90)"
-            "), "
+            "linear-gradient(rgba(5,5,18,0.78), rgba(5,5,18,0.92)), "
             f"url('{BACKGROUND_URI}');"
         )
     else:
-        background_css = """
-        background:
-            radial-gradient(
-                circle at 80% 10%,
-                rgba(155, 108, 255, 0.20),
-                transparent 30%
-            ),
-            linear-gradient(
-                135deg,
-                #050512,
-                #110a28,
-                #050512
-            );
-        """
+        background_css = (
+            "background: radial-gradient(circle at 80% 10%, "
+            "rgba(155,108,255,0.20), transparent 30%), "
+            "linear-gradient(135deg, #050512, #110a28, #050512);"
+        )
 
     css = """
     <style>
-
     :root {
         --gold: #d7b45a;
         --gold-light: #f1d98a;
@@ -651,17 +720,90 @@ def inject_styles() -> None:
 
     .block-container {
         max-width: 1500px;
-        padding-top: 1.5rem;
+        padding-top: 1.25rem;
         padding-bottom: 4rem;
     }
 
     h1 { color: var(--gold-light); }
     h2 { color: #f6f0ff; }
     h3 { color: #f1eaff; }
-
     p { color: #d0c9df; }
-
     .stCaption { color: #9991ac; }
+
+    .page-banner {
+        position: relative;
+        width: 100%;
+        min-height: 290px;
+        margin: 0 0 1.5rem 0;
+        overflow: hidden;
+        border-radius: 24px;
+        border: 1px solid rgba(215, 180, 90, 0.28);
+        background: rgba(8, 7, 24, 0.90);
+        box-shadow: 0 24px 70px rgba(0,0,0,0.35);
+    }
+
+    .page-banner-image {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .page-banner-overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(5,5,18,0.94) 0%, rgba(5,5,18,0.68) 42%, rgba(5,5,18,0.24) 100%);
+    }
+
+    .page-banner-content {
+        position: relative;
+        z-index: 2;
+        min-height: 290px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 2rem 3rem;
+        max-width: 850px;
+    }
+
+    .page-banner-eyebrow {
+        color: var(--gold-light);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        margin-bottom: 0.75rem;
+    }
+
+    .page-banner-title {
+        color: #ffffff;
+        font-size: clamp(2rem, 4vw, 3.6rem);
+        line-height: 1.05;
+        font-weight: 850;
+        letter-spacing: -0.035em;
+        text-shadow: 0 5px 25px rgba(0,0,0,0.55);
+    }
+
+    .page-banner-subtitle {
+        color: #d9d2e9;
+        font-size: 1rem;
+        line-height: 1.55;
+        margin-top: 0.9rem;
+        max-width: 680px;
+    }
+
+    .page-banner-missing {
+        margin-top: 1rem;
+        color: #e5c66d;
+        font-size: 0.7rem;
+        letter-spacing: 0.08em;
+    }
+
+    .page-banner-fallback {
+        background: radial-gradient(circle at 80% 20%, rgba(155,108,255,0.25), transparent 34%), linear-gradient(135deg, #090718, #17102e, #050512);
+    }
 
     div[data-testid="stMetric"] {
         background: rgba(12, 10, 31, 0.78);
@@ -671,13 +813,8 @@ def inject_styles() -> None:
         box-shadow: 0 12px 35px rgba(0, 0, 0, 0.20);
     }
 
-    div[data-testid="stMetricLabel"] {
-        color: #aaa3c2;
-    }
-
-    div[data-testid="stMetricValue"] {
-        color: #f1d98a;
-    }
+    div[data-testid="stMetricLabel"] { color: #aaa3c2; }
+    div[data-testid="stMetricValue"] { color: #f1d98a; }
 
     div[data-testid="stButton"] > button {
         border: 1px solid rgba(215, 180, 90, 0.25);
@@ -703,35 +840,32 @@ def inject_styles() -> None:
         border-radius: 15px;
     }
 
-    [data-testid="stDataFrame"] {
-        border-radius: 14px;
-    }
+    [data-testid="stDataFrame"] { border-radius: 14px; }
 
-    .hero-spacer {
-        height: 10px;
+    .asset-status {
+        padding: 0.75rem 0.9rem;
+        margin: 0.35rem 0;
+        border-radius: 12px;
+        background: rgba(12,10,31,0.72);
+        border: 1px solid rgba(155,108,255,0.14);
+        font-size: 0.78rem;
     }
 
     @media (max-width: 768px) {
-        .block-container {
-            padding-left: 1rem;
-            padding-right: 1rem;
-        }
+        .block-container { padding-left: 0.85rem; padding-right: 0.85rem; }
+        .page-banner { min-height: 220px; border-radius: 18px; }
+        .page-banner-content { min-height: 220px; padding: 1.35rem 1.25rem; }
+        .page-banner-title { font-size: 2rem; }
+        .page-banner-subtitle { font-size: 0.86rem; }
+        .page-banner-overlay { background: linear-gradient(90deg, rgba(5,5,18,0.94), rgba(5,5,18,0.55)); }
     }
-
     </style>
     """
 
-    css = css.replace(
-        "BACKGROUND_CSS_PLACEHOLDER",
-        background_css,
-    )
-
     st.markdown(
-        css,
+        css.replace("BACKGROUND_CSS_PLACEHOLDER", background_css),
         unsafe_allow_html=True,
     )
-
-inject_styles()
 
 
 # ============================================================
@@ -802,6 +936,15 @@ with st.sidebar:
 
         st.success("Database ready")
 
+        banner_count = sum(
+            1 for path in PAGE_BANNER_CANDIDATES.values()
+            if path.exists()
+        )
+        if banner_count == len(PAGE_BANNER_CANDIDATES):
+            st.success(f"Page visual system ready: {banner_count}/{len(PAGE_BANNER_CANDIDATES)} banners")
+        else:
+            st.warning(f"Page visual system: {banner_count}/{len(PAGE_BANNER_CANDIDATES)} banners")
+
     st.divider()
 
     st.caption(
@@ -820,6 +963,12 @@ if page == "Command Center":
     # --------------------------------------------------------
     # HERO
     # --------------------------------------------------------
+
+    render_page_banner(
+        "Command Center",
+        "PieroloOS Command Center",
+        "Executive visibility across the professional-service operating environment.",
+    )
 
     st.title(
         "PieroloOS"
@@ -1129,6 +1278,12 @@ if page == "Command Center":
 
 elif page == "Client Intake":
 
+    render_page_banner(
+        "Client Intake",
+        "Client Intake",
+        "Capture a structured client and business brief.",
+    )
+
     st.title(
         "Client Intake"
     )
@@ -1311,6 +1466,12 @@ elif page == "Client Intake":
 # ============================================================
 
 elif page == "Business Profile":
+
+    render_page_banner(
+        "Business Profile",
+        "Business Profile",
+        "Build a decision-ready commercial and strategic profile.",
+    )
 
     st.title(
         "Business Profile"
@@ -1505,6 +1666,12 @@ elif page == "Business Profile":
 
 elif page == "Jurisdiction Lens":
 
+    render_page_banner(
+        "Jurisdiction Lens",
+        "Jurisdiction Lens",
+        "Structured jurisdiction intelligence for business decisions.",
+    )
+
     st.title(
         "Jurisdiction Lens"
     )
@@ -1684,6 +1851,12 @@ elif page == "Jurisdiction Lens":
 # ============================================================
 
 elif page == "Formation Roadmap":
+
+    render_page_banner(
+        "Formation Roadmap",
+        "Formation Roadmap",
+        "Translate business intent into an executable formation sequence.",
+    )
 
     st.title(
         "Formation Roadmap"
@@ -1895,6 +2068,12 @@ elif page == "Formation Roadmap":
 
 elif page == "Compliance":
 
+    render_page_banner(
+        "Compliance",
+        "Compliance Control",
+        "Keep recurring corporate and operational obligations visible.",
+    )
+
     st.title(
         "Compliance Checklist"
     )
@@ -1961,6 +2140,12 @@ elif page == "Compliance":
 # ============================================================
 
 elif page == "Report Generator":
+
+    render_page_banner(
+        "Report Generator",
+        "Report Generator",
+        "Turn structured client information into professional outputs.",
+    )
 
     st.title(
         "Report Generator"
@@ -2174,6 +2359,12 @@ This report is generated by PieroloOS as a decision-support and professional-ser
 # ============================================================
 
 elif page == "Engagement Records":
+
+    render_page_banner(
+        "Engagement Records",
+        "Engagement Control",
+        "Track client matters, actions, status and operational history.",
+    )
 
     st.title(
         "Engagement Records"
