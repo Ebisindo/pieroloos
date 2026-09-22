@@ -736,6 +736,8 @@ def inject_styles() -> None:
 
     html, body {
         background: #03030d !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
 
     .stApp {
@@ -875,10 +877,47 @@ def inject_styles() -> None:
             radial-gradient(circle at 28% 65%, rgba(155,108,255,0.08), transparent 22%);
     }
 
+    /* The content area must end at the PieroloOS footer.
+       Avoid Streamlit's default bottom breathing room becoming
+       an invisible scroll zone beneath the footer. */
     .block-container {
         max-width: 1500px;
         padding-top: 1.25rem;
-        padding-bottom: 4rem;
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
+    }
+
+    [data-testid="stMain"] {
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
+    }
+
+    [data-testid="stAppViewContainer"] {
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
+    }
+
+    /* Suppress Streamlit's separate platform footer so the
+       PieroloOS footer remains the final visible application boundary. */
+    [data-testid="stFooter"] {
+        display: none !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .pieroloos-footer {
+        width: 100%;
+        margin: 1.5rem 0 0 0;
+        padding: 1rem 0 0 0;
+        border-top: 1px solid rgba(215,180,90,0.22);
+        text-align: center;
+        box-sizing: border-box;
+    }
+
+    .pieroloos-footer p {
+        margin: 0.25rem 0;
     }
 
     /* ========================================================
@@ -1070,6 +1109,11 @@ def inject_styles() -> None:
         [data-testid="stAppViewContainer"]::before {
             width: 520px;
             height: 230px;
+        }
+
+        .pieroloos-footer {
+            margin-top: 1rem;
+            padding-top: 0.85rem;
         }
     }
 
@@ -2810,16 +2854,13 @@ elif page == "Engagement Records":
 # 16. FOOTER
 # ============================================================
 
-st.divider()
-
-st.caption(
-    "PIEROLOOS v0.1 · Professional Service Operating System · "
-    "PieroloCorp International LLC"
-)
-
-st.caption(
-    "Decision-support prototype. Verify legal, tax, regulatory, "
-    "banking, and compliance matters with appropriate professionals "
-    "and official authorities."
-)
+st.markdown(
+    """
+    <footer class="pieroloos-footer" aria-label="PieroloOS footer">
+        <p>PIEROLOOS v0.1 · Professional Service Operating System · PieroloCorp International LLC</p>
+        <p>Decision-support prototype. Verify legal, tax, regulatory, banking, and compliance matters with appropriate professionals and official authorities.</p>
+    </footer>
+    """,
+    unsafe_allow_html=True,
+    )
     
