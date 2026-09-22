@@ -75,6 +75,21 @@ BACKGROUND_EXISTS = BACKGROUND_PATH.exists()
 LOGO_EXISTS = LOGO_PATH is not None
 
 
+# Additional page-specific visual assets.
+PAGE_BANNER_CANDIDATES = {
+    "Command Center": ASSET_DIR / "pieroloos_command_center.png",
+    "Client Intake": ASSET_DIR / "pieroloos_client_intake.png",
+    "Business Profile": ASSET_DIR / "pieroloos_business_profile.png",
+    "Jurisdiction Lens": ASSET_DIR / "pieroloos_jurisdiction.png",
+    "Formation Roadmap": ASSET_DIR / "pieroloos_formation.png",
+    "Compliance": ASSET_DIR / "pieroloos_compliance.png",
+    "Report Generator": ASSET_DIR / "pieroloos_reports.png",
+    "Engagement Records": ASSET_DIR / "pieroloos_engagements.png",
+}
+
+PAGE_BANNER_WIDTH = 1600
+
+
 # ============================================================
 # 3. DATABASE
 # ============================================================
@@ -418,13 +433,14 @@ def execute_write(
 
     connection = get_connection()
 
-    connection.execute(
-        query,
-        params,
-    )
-
-    connection.commit()
-    connection.close()
+    try:
+        connection.execute(query, params)
+        connection.commit()
+    except sqlite3.Error as exc:
+        connection.rollback()
+        raise RuntimeError(f"Database operation failed: {exc}") from exc
+    finally:
+        connection.close()
 
 
 def fetch_all(
@@ -585,6 +601,26 @@ JURISDICTIONS = [
         "source": "CAC / FIRS / relevant Nigerian authorities",
     },
 ]
+
+
+
+def render_page_banner(page_name: str, title: str, subtitle: str) -> None:
+    """Render a branded graphical header on every major workspace page."""
+    banner_path = PAGE_BANNER_CANDIDATES.get(page_name)
+
+    if banner_path and banner_path.exists():
+        st.image(str(banner_path), use_container_width=True)
+    else:
+        st.markdown(
+            f"""
+            <div class="page-banner-fallback">
+                <div class="page-banner-eyebrow">PIEROLOOS · PIEROLOCORP INTERNATIONAL LLC</div>
+                <div class="page-banner-title">{title}</div>
+                <div class="page-banner-subtitle">{subtitle}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 # ============================================================
@@ -750,6 +786,34 @@ def inject_styles() -> None:
             border-radius: 14px;
         }}
 
+        .page-banner-fallback {
+            border: 1px solid rgba(215, 180, 90, 0.22);
+            border-radius: 22px;
+            padding: 2rem;
+            margin-bottom: 1.25rem;
+            background: linear-gradient(135deg, rgba(15,10,38,.94), rgba(5,5,18,.94));
+            box-shadow: 0 18px 50px rgba(0,0,0,.25);
+        }
+
+        .page-banner-eyebrow {
+            color: #d7b45a;
+            font-size: .78rem;
+            letter-spacing: .16em;
+            font-weight: 800;
+        }
+
+        .page-banner-title {
+            color: #f6f3ff;
+            font-size: 2rem;
+            font-weight: 800;
+            margin-top: .45rem;
+        }
+
+        .page-banner-subtitle {
+            color: #c8c0d9;
+            margin-top: .45rem;
+        }
+
         .hero-spacer {{
             height: 10px;
         }}
@@ -840,6 +904,15 @@ with st.sidebar:
 
         st.success("Database ready")
 
+        banner_count = sum(
+            1 for path in PAGE_BANNER_CANDIDATES.values()
+            if path.exists()
+        )
+        if banner_count == len(PAGE_BANNER_CANDIDATES):
+            st.success(f"Page visual system ready: {banner_count}/{len(PAGE_BANNER_CANDIDATES)} banners")
+        else:
+            st.warning(f"Page visual system: {banner_count}/{len(PAGE_BANNER_CANDIDATES)} banners")
+
     st.divider()
 
     st.caption(
@@ -858,6 +931,12 @@ if page == "Command Center":
     # --------------------------------------------------------
     # HERO
     # --------------------------------------------------------
+
+    render_page_banner(
+        "Command Center",
+        "PieroloOS Command Center",
+        "Executive visibility across the professional-service operating environment.",
+    )
 
     st.title(
         "PieroloOS"
@@ -1167,6 +1246,12 @@ if page == "Command Center":
 
 elif page == "Client Intake":
 
+    render_page_banner(
+        "Client Intake",
+        "Client Intake",
+        "Capture a structured client and business brief.",
+    )
+
     st.title(
         "Client Intake"
     )
@@ -1349,6 +1434,12 @@ elif page == "Client Intake":
 # ============================================================
 
 elif page == "Business Profile":
+
+    render_page_banner(
+        "Business Profile",
+        "Business Profile",
+        "Build a decision-ready commercial and strategic profile.",
+    )
 
     st.title(
         "Business Profile"
@@ -1543,6 +1634,12 @@ elif page == "Business Profile":
 
 elif page == "Jurisdiction Lens":
 
+    render_page_banner(
+        "Jurisdiction Lens",
+        "Jurisdiction Lens",
+        "Structured jurisdiction intelligence for business decisions.",
+    )
+
     st.title(
         "Jurisdiction Lens"
     )
@@ -1722,6 +1819,12 @@ elif page == "Jurisdiction Lens":
 # ============================================================
 
 elif page == "Formation Roadmap":
+
+    render_page_banner(
+        "Formation Roadmap",
+        "Formation Roadmap",
+        "Translate business intent into an executable formation sequence.",
+    )
 
     st.title(
         "Formation Roadmap"
@@ -1933,6 +2036,12 @@ elif page == "Formation Roadmap":
 
 elif page == "Compliance":
 
+    render_page_banner(
+        "Compliance",
+        "Compliance Control",
+        "Keep recurring corporate and operational obligations visible.",
+    )
+
     st.title(
         "Compliance Checklist"
     )
@@ -1999,6 +2108,12 @@ elif page == "Compliance":
 # ============================================================
 
 elif page == "Report Generator":
+
+    render_page_banner(
+        "Report Generator",
+        "Report Generator",
+        "Turn structured client information into professional outputs.",
+    )
 
     st.title(
         "Report Generator"
@@ -2212,6 +2327,12 @@ This report is generated by PieroloOS as a decision-support and professional-ser
 # ============================================================
 
 elif page == "Engagement Records":
+
+    render_page_banner(
+        "Engagement Records",
+        "Engagement Control",
+        "Track client matters, actions, status and operational history.",
+    )
 
     st.title(
         "Engagement Records"
@@ -2456,4 +2577,4 @@ st.caption(
     "Decision-support prototype. Verify legal, tax, regulatory, "
     "banking, and compliance matters with appropriate professionals "
     "and official authorities."
-)
+    )
