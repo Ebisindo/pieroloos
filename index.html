@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#02030b">
+  <meta name="color-scheme" content="dark">
+  <title>PieroloOS</title>
+  <link rel="preload" as="image" href="/boot/assets/PieroloCorp_Logo.webp" fetchpriority="high">
+  <link rel="stylesheet" href="/boot/boot.css">
+</head>
+<body>
+  <main id="boot" class="boot" aria-label="PieroloOS loading">
+    <div class="cosmos" aria-hidden="true">
+      <div class="nebula nebula-a"></div>
+      <div class="nebula nebula-b"></div>
+      <div class="stars stars-a"></div>
+      <div class="stars stars-b"></div>
+      <div class="orbit orbit-a"></div>
+      <div class="orbit orbit-b"></div>
+      <div class="singularity"></div>
+    </div>
+
+    <section class="identity" aria-label="PieroloCorp International LLC">
+      <img
+        class="official-logo"
+        src="/boot/assets/PieroloCorp_Logo.webp"
+        alt="PieroloCorp International LLC official logo"
+        width="1536"
+        height="1536"
+        decoding="async"
+      >
+
+      <div class="system-signature">
+        <div class="system-name">PIEROLOOS</div>
+        <div class="system-subtitle">PROFESSIONAL SERVICE OPERATING SYSTEM</div>
+      </div>
+    </section>
+
+    <div class="boot-status" role="status" aria-live="polite">
+      <span class="status-mark"></span>
+      <span id="status-text">INITIALIZING OPERATING ENVIRONMENT</span>
+    </div>
+
+    <noscript>
+      <p class="noscript">JavaScript is required to enter PieroloOS.</p>
+      <a class="noscript-link" href="/app/">Continue to PieroloOS</a>
+    </noscript>
+  </main>
+
+  <script src="/boot/boot.js" defer></script>
+</body>
+</html>
