@@ -1,6 +1,6 @@
 # PieroloOS — Independent Visual Boot Layer
 
-This directory implements Option 5: a presentation-only boot layer separated from the PieroloOS application runtime.
+This directory implements: a presentation-only boot layer separated from the PieroloOS application runtime.
 
 ## Design principle
 
@@ -44,6 +44,6 @@ HTTPS / Reverse Proxy
 
 ## Important deployment note
 
-Streamlit Community Cloud does not provide the kind of root-level reverse-proxy routing needed to make this a genuinely independent pre-application document. For the full Option 5 architecture, deploy the boot layer and Streamlit behind a gateway/reverse proxy such as Nginx, Caddy, Traefik, or a small frontend server.
+Streamlit Community Cloud does not provide the kind of root-level reverse-proxy routing needed to make this a genuinely independent pre-application document. For the full architecture, deploy the boot layer and Streamlit behind a gateway/reverse proxy such as Nginx, Caddy, Traefik, or a small frontend server.
 
 The current `app.py` should not be modified merely to create this visual layer.
