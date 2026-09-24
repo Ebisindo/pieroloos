@@ -1,4 +1,4 @@
-"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000">
 <defs>
   <radialGradient id="space" cx="68%" cy="42%" r="75%">
     <stop offset="0" stop-color="#17104a"/><stop offset=".35" stop-color="#090b2a"/>
@@ -44,4 +44,4 @@
 </g>
 <ellipse cx="0" cy="70" rx="365" ry="62" fill="none" stroke="url(#ring)" stroke-width="8"/>
 </g>
-</svg>"""
+</svg>
